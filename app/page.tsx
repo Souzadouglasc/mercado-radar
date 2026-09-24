@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ListChecks, Search, ShoppingCart, TrendingDown, Trophy, Tag, MapPin } from "lucide-react";
+import { ShoppingCart, TrendingDown, Trophy, Tag, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Price } from "@/components/price";
 import { ProductCard } from "@/components/product-card";
@@ -14,7 +13,7 @@ import { ProductImage } from "@/components/product-image";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getCachedDeals } from "@/lib/catalog/cached";
-import { latestPricesBatch, type DealRow, type LatestPrice, marketColor } from "@/lib/catalog/queries";
+import { latestPricesBatch, type DealRow } from "@/lib/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Compare preços de supermercados",
@@ -336,16 +335,6 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-function HeroSkeleton() {
-  return (
-    <div className="flex flex-col gap-4" aria-hidden>
-      <div className="shimmer-pronto h-12 w-3/4" />
-      <div className="shimmer-pronto h-14 w-full lg:max-w-2xl" />
-      <div className="shimmer-pronto h-12 w-full" />
-    </div>
-  );
-}
-
 function OndeComprarSkeleton() {
   return (
     <Card className="border-2 border-primary card-hover-elevated">
@@ -376,102 +365,72 @@ function OfertasSkeleton() {
 
 export default function HomePage() {
   return (
-    <div className="flex flex-col gap-8">
-      {/* Hero: busca em destaque + chips rápidos */}
-      <section className="relative overflow-hidden px-4 py-2 lg:py-6 hero-gradient-moderate">
-        <div className="relative z-10">
-          <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl fade-in text-white">
-            Descubra onde sua compra sai <span className="text-cta">mais barata</span>
+    <div className="flex flex-col gap-12 lg:gap-16">
+      <section className="relative isolate overflow-hidden rounded-[2rem] bg-[#123c2b] px-6 py-10 text-white shadow-xl shadow-emerald-950/10 sm:px-10 sm:py-14 lg:px-14 lg:py-16">
+        <div aria-hidden className="absolute -right-20 -top-28 -z-10 h-96 w-96 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-40 left-1/3 -z-10 h-72 w-72 rounded-full bg-lime-300/10 blur-3xl" />
+        <div className="relative max-w-3xl">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Economia no seu bairro</p>
+          <h1 className="max-w-2xl text-3xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            Sua compra mais inteligente começa aqui.
           </h1>
-          <div className="w-full lg:max-w-2xl mt-4 fade-in-slow">
+          <p className="mt-4 max-w-xl text-sm leading-6 text-emerald-50/80 sm:text-base">
+            Compare preços em São José e descubra onde cada produto custa menos.
+          </p>
+          <div className="mt-7 max-w-2xl rounded-2xl bg-white p-1.5 shadow-2xl shadow-black/20">
             <SearchAutocomplete />
           </div>
-          <div className="flex flex-wrap gap-2 mt-6" role="group" aria-label="Buscas rápidas">
+          <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Buscas rápidas">
             {QUICK_SEARCH_CHIPS.map((chip) => (
-              <Button
-                key={chip.query}
-                variant="outline"
-                asChild
-                size="sm"
-                className="gap-1.5 scale-hover btn-ghost-hover text-white bg-white/10 backdrop-blur-sm"
-              >
-                <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
-                  <span aria-hidden>{chip.icon}</span> {chip.label}
-                </Link>
-              </Button>
+              <Link key={chip.query} href={`/buscar?q=${encodeURIComponent(chip.query)}`} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20">
+                <span aria-hidden>{chip.icon}</span> {chip.label}
+              </Link>
             ))}
           </div>
         </div>
+        <div className="mt-10 flex flex-wrap gap-x-7 gap-y-2 border-t border-white/15 pt-5 text-xs text-emerald-50/75">
+          <span>Fort Atacadista</span><span>SuperKoch</span><span>Brasil Atacadista</span><span>Komprão</span>
+        </div>
       </section>
 
-      {/* Duas seções side-by-side no desktop */}
-      <section className="grid gap-6 lg:grid-cols-2">
-        {/* Coluna esquerda: Onde sua lista sai mais barata */}
-        <Card className="card-glass card-hover-elevated">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 fade-in">
-              <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
-            </CardTitle>
-            <CardDescription className="fade-in-slow">Melhor mercado para o rancho do mês (baseado em template).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<OndeComprarSkeleton />}><OndeComprarHoje /></Suspense>
-          </CardContent>
-        </Card>
-
-        {/* Coluna direita: Ofertas de hoje em São José */}
-        <Card className="card-glass card-hover-elevated">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 fade-in">
-              <MapPin className="h-5 w-5 text-primary" aria-hidden /> Ofertas de hoje em São José
-            </CardTitle>
-            <CardDescription className="fade-in-slow">Encartes e coletas recentes com thumbnail.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<OfertasSkeleton />}><OfertasHoje /></Suspense>
-          </CardContent>
-        </Card>
+      <section className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <div className="space-y-4">
+          <SectionHeading icon={<ShoppingCart className="h-5 w-5" />} eyebrow="Escolha com confiança" title="Onde comprar hoje" description="Veja qual mercado tem a melhor média de preços coletados." />
+          <Suspense fallback={<OndeComprarSkeleton />}><OndeComprarHoje /></Suspense>
+        </div>
+        <div className="space-y-4">
+          <SectionHeading icon={<MapPin className="h-5 w-5" />} eyebrow="São José" title="Ofertas recentes" description="Quedas de preço e produtos perto do mínimo histórico." />
+          <Suspense fallback={<OfertasSkeleton />}><OfertasHoje /></Suspense>
+        </div>
       </section>
 
-      {/* Seção: Comparador (último preço por mercado) */}
-      <section>
-        <h2 className="mb-3 text-xl font-bold fade-in">Comparador — último preço por mercado</h2>
-        <Card className="card-glass">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 fade-in">
-              <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
-            </CardTitle>
-            <CardDescription className="fade-in-slow">Último preço por mercado, lado a lado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<SectionSkeleton />}><Comparador /></Suspense>
-          </CardContent>
-        </Card>
+      <section className="space-y-5">
+        <SectionHeading icon={<TrendingDown className="h-5 w-5" />} eyebrow="Compare antes de sair" title="Preços por mercado" description="Últimos preços encontrados para cada produto." />
+        <Suspense fallback={<SectionSkeleton />}><Comparador /></Suspense>
       </section>
 
-      {/* Seção: Ofertas em destaque (quedas + mínimos) */}
-      <section>
-        <h2 className="mb-3 text-xl font-bold fade-in">Ofertas em destaque</h2>
-        <Card className="card-glass">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 fade-in">
-              <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque
-            </CardTitle>
-            <CardDescription className="fade-in-slow">Maiores quedas e mínimos históricos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<OfertasSkeleton />}><Ofertas /></Suspense>
-          </CardContent>
-        </Card>
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <SectionHeading icon={<Tag className="h-5 w-5" />} eyebrow="Boas oportunidades" title="Em destaque" description="Produtos com queda recente ou perto do menor preço registrado." />
+          <Button variant="outline" asChild><Link href="/ofertas">Ver todas as ofertas</Link></Button>
+        </div>
+        <Suspense fallback={<OfertasSkeleton />}><Ofertas /></Suspense>
       </section>
 
-      {/* Seção: Mercados monitorados */}
-      <section>
-        <h2 className="mb-3 text-xl font-bold fade-in">Mercados monitorados</h2>
-        <Suspense fallback={<SectionSkeleton lines={4} />}>
-          <Mercados />
-        </Suspense>
+      <section className="space-y-5 border-t pt-8">
+        <SectionHeading icon={<MapPin className="h-5 w-5" />} eyebrow="Cobertura local" title="Mercados monitorados" description="Acompanhe preços das redes disponíveis na região." />
+        <Suspense fallback={<SectionSkeleton lines={4} />}><Mercados /></Suspense>
       </section>
+    </div>
+  );
+}
+
+function SectionHeading({ icon, eyebrow, title, description }: { icon: React.ReactNode; eyebrow: string; title: string; description: string }) {
+  return (
+    <div>
+      <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-primary">{icon}{eyebrow}</p>
+      <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
     </div>
   );
 }
