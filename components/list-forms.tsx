@@ -194,14 +194,52 @@ export function AddItemForm({ listId }: { listId: string }) {
   );
 }
 
+export function RemoveItemButton({
+  itemId,
+  listId,
+  productName,
+}: {
+  itemId: string;
+  listId: string;
+  productName: string;
+}) {
+  const [, removeAction] = useActionState(removeItem, null);
+  const [busy, start] = useTransition();
+
+  function remove() {
+    const fd = new FormData();
+    fd.set("id", itemId);
+    fd.set("list_id", listId);
+    start(() => removeAction(fd));
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-destructive"
+      aria-label={`Remover ${productName} da lista`}
+      disabled={busy}
+      onClick={() => {
+        if (window.confirm("Remover este item?")) remove();
+      }}
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+  );
+}
+
 export function QuantityStepper({
   itemId,
   listId,
   quantity,
+  productName = "item",
 }: {
   itemId: string;
   listId: string;
   quantity: number;
+  productName?: string;
 }) {
   const [, setAction] = useActionState(setItemQuantity, null);
   const [, removeAction] = useActionState(removeItem, null);
@@ -223,44 +261,31 @@ export function QuantityStepper({
   }
 
   return (
-    <span className="flex items-center gap-1">
+    <span className="inline-flex items-center gap-1 rounded-full border p-0.5" role="group" aria-label={`Quantidade de ${productName}`}>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="h-8 w-8"
-        aria-label="Diminuir quantidade"
+        className="h-8 w-8 rounded-full"
+        aria-label={`Diminuir quantidade de ${productName}`}
         disabled={busy}
         onClick={() => (quantity > 1 ? set(quantity - 1) : remove())}
       >
         <Minus className="h-4 w-4" />
       </Button>
-      <span className="w-10 text-center text-sm font-semibold tabular-nums">
+      <span className="w-10 text-center text-sm font-semibold tabular-nums" aria-live="polite" aria-label={`Quantidade: ${quantity}`}>
         {quantity}
       </span>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="h-8 w-8"
-        aria-label="Aumentar quantidade"
+        className="h-8 w-8 rounded-full"
+        aria-label={`Aumentar quantidade de ${productName}`}
         disabled={busy}
         onClick={() => set(quantity + 1)}
       >
         <Plus className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive"
-        aria-label="Remover item"
-        disabled={busy}
-        onClick={() => {
-          if (window.confirm("Remover este item?")) remove();
-        }}
-      >
-        <Trash2 className="h-4 w-4" />
       </Button>
     </span>
   );

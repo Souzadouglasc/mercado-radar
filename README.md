@@ -40,6 +40,40 @@ comparação por mercado + compra dividida em `/listas/[id]`. Gráfico em
 `/produtos/[slug]?range=30d`. Favoritos via coração em produto/mercado,
 lista em `/favoritos`. Alertas em `/alertas` (disparo na coleta, Fase 5).
 
+## Design system + Performance (Tarefa F)
+
+**Tokens** (`app/globals.css`): primária verde economia (`--primary`,
+light `#178a4c` / dark refinado `#0c3b24` fundo), âmbar oferta (`--offer`),
+vermelho aumento (`--rise`); contraste AA. Preços sempre tabulares via
+`.price` / `.price-lg` / `.price-hero` / `.price-line`
+(`font-variant-numeric: tabular-nums`). Dark mode próprio (verde profundo,
+não inversão). Logo SVG próprio (`components/logo.tsx`), favicon
+(`public/favicon.svg`), PWA icons coerentes, OG image default
+(`app/opengraph-image.tsx`).
+
+**Leitura em 1 round-trip** (`supabase/migrations/0003_perf.sql`):
+view `latest_prices` (último preço por produto×mercado) + RPC
+`latest_prices_for_products(uuid[])` (`DISTINCT ON (product_id, market_id)`),
+usada por `latestPricesBatch()` em `lib/catalog/queries.ts` (home, produto,
+mercado, lista). Busca full-text pt-BR via RPC `search_products_ft`
+(`to_tsvector('portuguese', nome + marca)` + fallback ilike) com índice GIN
++ trigram `pg_trgm` (`products_name_trgm_idx`, `products_brand_trgm_idx`).
+Índices: `prices(product_id, collected_at desc)`, `prices(market_id,
+collected_at desc)`. RLS intacto (grants só `select`/`execute` p/ anon).
+
+**Cache**: `unstable_cache` 300s p/ catálogo/estatísticas
+(`lib/catalog/cached.ts`, client anônimo sem cookies), ISR `revalidate = 300`
+em `/produtos/[slug]` e `/mercados/[slug]`, `loading.tsx` + Suspense por
+seção na home e `app/loading.tsx` raiz. **Bundle**: `recharts` só na página
+de produto via `dynamic(..., { ssr: false })`; imagens `next/image` com
+`sizes` + lazy (`edge.osuper.com.br`, Supabase em `remotePatterns`).
+
+Aplicar a migration 0003 (idempotente, só leitura — aplicar uma vez):
+
+```bash
+npx supabase db push   # ou: SQL Editor → cole supabase/migrations/0003_perf.sql
+```
+
 ## Pré-requisitos
 
 - Node 22+ e npm

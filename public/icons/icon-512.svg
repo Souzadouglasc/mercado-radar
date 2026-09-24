@@ -1,9 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="110" fill="#15803d"/>
-  <g fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round">
-    <circle cx="256" cy="256" r="36" fill="#ffffff" stroke="none"/>
-    <path d="M256 80v58M256 374v58M80 256h58M374 256h58"/>
-    <circle cx="256" cy="256" r="118"/>
-    <circle cx="256" cy="256" r="176" opacity="0.5"/>
+  <rect width="512" height="512" rx="112" fill="#0c3b24"/>
+  <rect x="36" y="36" width="440" height="440" rx="88" fill="none" stroke="#178a4c" stroke-width="14"/>
+  <g fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round">
+    <circle cx="234" cy="278" r="34" fill="#ffffff" stroke="none"/>
+    <circle cx="234" cy="278" r="102"/>
+    <circle cx="234" cy="278" r="160" opacity="0.45"/>
+  </g>
+  <line x1="234" y1="278" x2="342" y2="170" stroke="#f5b301" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="342" cy="170" r="24" fill="#f5b301"/>
+  <g transform="translate(314,314)">
+    <rect x="-20" y="-54" width="140" height="86" rx="22" fill="#178a4c"/>
+    <text x="50" y="8" text-anchor="middle" font-family="Arial,sans-serif" font-size="54" font-weight="bold" fill="#ffffff">R$</text>
   </g>
 </svg>

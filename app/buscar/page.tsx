@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ProductCard } from "@/components/product-card";
 import { SearchBox } from "@/components/search-box";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getCachedSearch } from "@/lib/catalog/cached";
 import { searchProducts } from "@/lib/catalog/queries";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -33,8 +34,14 @@ async function Resultados({ q }: { q: string }) {
       />
     );
   }
+  // Busca anônima usa cache (300s); logada usa client com cookies (fresco).
   const supabase = await createClient();
-  const resultados = await searchProducts(supabase, q);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const resultados = user
+    ? await searchProducts(supabase, q)
+    : await getCachedSearch(q.trim().slice(0, 80));
   if (resultados.length === 0) {
     return (
       <EmptyState
@@ -66,15 +73,15 @@ export default async function BuscarPage({
       <h1 className="text-2xl font-bold">
         {q ? `Resultados para “${q}”` : "Buscar produtos"}
       </h1>
-      <Suspense fallback={<Skeleton className="h-10 w-full" />}>
+      <Suspense fallback={<Skeleton className="shimmer h-10 w-full" />}>
         <SearchBox initial={q} />
       </Suspense>
       <Suspense
         fallback={
           <div className="flex flex-col gap-2" aria-hidden>
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="shimmer h-24 w-full" />
+            <Skeleton className="shimmer h-24 w-full" />
+            <Skeleton className="shimmer h-24 w-full" />
           </div>
         }
       >

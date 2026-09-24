@@ -25,59 +25,73 @@ export type ProductRow = {
   brand: string | null;
   unit: string | null;
   quantity: number | null;
+  image_url: string | null;
 };
 
-/** Busca produtos por nome/marca (ilike) com o último preço por mercado. */
-export async function searchProducts(
-  supabase: SupabaseClient,
-  q: string,
-  limit = 20,
-): Promise<(ProductRow & { latest: LatestPrice[] })[]> {
-  const term = q.trim().slice(0, 80);
-  if (!term) return [];
-  const { data: products, error } = await supabase
-    .from("products")
-    .select("id, name, slug, brand, unit, quantity")
-    .eq("active", true)
-    .or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
-    .order("name")
-    .limit(limit);
-  if (error || !products) return [];
-  const rows = products as ProductRow[];
-  const withPrices = await Promise.all(
-    rows.map(async (p) => ({ ...p, latest: await latestPrices(supabase, p.id) })),
-  );
-  return withPrices;
+type RpcLatestRow = {
+  product_id: string;
+  market_id: string;
+  price: number | string;
+  promotional_price: number | string | null;
+  collected_at: string;
+  market_name: string;
+  market_slug: string;
+};
+
+function toLatest(row: RpcLatestRow): LatestPrice {
+  return {
+    product_id: row.product_id,
+    market_id: row.market_id,
+    price: Number(row.price),
+    promotional_price:
+      row.promotional_price === null ? null : Number(row.promotional_price),
+    collected_at: row.collected_at,
+    market: { id: row.market_id, name: row.market_name, slug: row.market_slug },
+  };
 }
 
 /**
- * Último preço por mercado (1 query, sem N+1):
- * ordena por collected_at desc e mantém o primeiro de cada mercado no JS
- * (distinct on não é exposo via PostgREST; volume por produto é pequeno).
+ * Último preço por mercado para N produtos em 1 round-trip
+ * (RPC latest_prices_for_products — DISTINCT ON (product_id, market_id)).
+ * Fallback para a query ordenada caso a migration 0003 ainda não tenha sido aplicada.
  */
-export async function latestPrices(
+export async function latestPricesBatch(
   supabase: SupabaseClient,
-  productId: string,
-): Promise<LatestPrice[]> {
-  const { data, error } = await supabase
+  productIds: string[],
+): Promise<Map<string, LatestPrice[]>> {
+  const out = new Map<string, LatestPrice[]>();
+  if (productIds.length === 0) return out;
+  const { data, error } = await supabase.rpc("latest_prices_for_products", {
+    p_ids: productIds,
+  });
+  if (!error && data) {
+    for (const r of data as RpcLatestRow[]) {
+      const list = out.get(r.product_id) ?? [];
+      list.push(toLatest(r));
+      out.set(r.product_id, list);
+    }
+    return out;
+  }
+  // Fallback: 1 query ordenada + dedup no JS (sem N+1).
+  const { data: rows } = await supabase
     .from("prices")
     .select(
       "product_id, market_id, price, promotional_price, collected_at, market:markets(id, name, slug)",
     )
-    .eq("product_id", productId)
+    .in("product_id", productIds)
     .order("collected_at", { ascending: false })
-    .limit(50);
-  if (error || !data) return [];
+    .limit(Math.min(500, productIds.length * 20));
   const seen = new Set<string>();
-  const out: LatestPrice[] = [];
-  for (const row of data as unknown as (Omit<LatestPrice, "market"> & {
+  for (const row of (rows ?? []) as unknown as (Omit<LatestPrice, "market"> & {
     market: LatestPrice["market"] | LatestPrice["market"][];
   })[]) {
-    if (seen.has(row.market_id)) continue;
-    seen.add(row.market_id);
+    const key = `${row.product_id}|${row.market_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const market = Array.isArray(row.market) ? row.market[0] : row.market;
     if (!market) continue;
-    out.push({
+    const list = out.get(row.product_id) ?? [];
+    list.push({
       product_id: row.product_id,
       market_id: row.market_id,
       price: Number(row.price),
@@ -86,8 +100,58 @@ export async function latestPrices(
       collected_at: row.collected_at,
       market,
     });
+    out.set(row.product_id, list);
   }
   return out;
+}
+
+/** Último preço por mercado (1 produto). Usa o batch — 1 round-trip. */
+export async function latestPrices(
+  supabase: SupabaseClient,
+  productId: string,
+): Promise<LatestPrice[]> {
+  const batch = await latestPricesBatch(supabase, [productId]);
+  return batch.get(productId) ?? [];
+}
+
+const PRODUCT_FIELDS = "id, name, slug, brand, unit, quantity, image_url";
+
+/** Busca full-text pt-BR (RPC search_products_ft) + fallback ilike. */
+export async function searchProducts(
+  supabase: SupabaseClient,
+  q: string,
+  limit = 20,
+): Promise<(ProductRow & { latest: LatestPrice[] })[]> {
+  const term = q.trim().slice(0, 80);
+  if (!term) return [];
+  let rows: ProductRow[] = [];
+  const { data: ft, error: ftError } = await supabase.rpc("search_products_ft", {
+    p_term: term,
+    p_limit: limit,
+  });
+  if (!ftError && ft) {
+    rows = (ft as (ProductRow & { rank: number })[]).map(
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      ({ rank, ...p }) => p,
+    );
+  } else {
+    // Fallback: comportamento anterior (ilike).
+    const { data: products, error } = await supabase
+      .from("products")
+      .select(PRODUCT_FIELDS)
+      .eq("active", true)
+      .or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
+      .order("name")
+      .limit(limit);
+    if (error || !products) return [];
+    rows = products as ProductRow[];
+  }
+  if (rows.length === 0) return [];
+  const batch = await latestPricesBatch(
+    supabase,
+    rows.map((p) => p.id),
+  );
+  return rows.map((p) => ({ ...p, latest: batch.get(p.id) ?? [] }));
 }
 
 export type ProductStats = {
@@ -119,9 +183,9 @@ export const HISTORY_RANGE_DAYS: Record<HistoryRange, number> = {
 
 /** Cores por mercado para o gráfico de histórico (1 cor por mercado). */
 export const MARKET_COLORS: Record<string, string> = {
-  fort: "#16a34a",
+  fort: "#178a4c",
   koch: "#2563eb",
-  brasil: "#ea580c",
+  brasil: "#c2620a",
   komprao: "#9333ea",
 };
 
@@ -178,42 +242,63 @@ export type DealRow = ProductRow & {
   marketSlug: string;
 };
 
-/**
- * Dashboard: usa últimos 200 produtos ativos com preços, calcula no JS
- * (1 query de produtos + N queries de preços limitadas; limite 5 cada).
- */
 async function candidateProducts(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("products")
-    .select("id, name, slug, brand, unit, quantity")
+    .select(PRODUCT_FIELDS)
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(60);
   return (data ?? []) as ProductRow[];
 }
 
-async function pricesWindow(
+type WindowRow = { productId: string; price: number; collected_at: string };
+
+/** Janela de preços de N produtos em 1 query (elimina N+1 do dashboard). */
+async function pricesWindowBatch(
   supabase: SupabaseClient,
-  productId: string,
+  productIds: string[],
   days: number,
-  limit = 120,
-): Promise<{ price: number; collected_at: string }[]> {
+  perProduct = 120,
+): Promise<Map<string, WindowRow[]>> {
+  const out = new Map<string, WindowRow[]>();
+  if (productIds.length === 0) return out;
   const since = new Date(
     Date.now() - days * 24 * 60 * 60 * 1000,
   ).toISOString();
   const { data, error } = await supabase
     .from("prices")
-    .select("price, promotional_price, collected_at")
-    .eq("product_id", productId)
+    .select("product_id, price, promotional_price, collected_at")
+    .in("product_id", productIds)
     .gte("collected_at", since)
     .order("collected_at", { ascending: false })
-    .limit(limit);
-  if (error || !data) return [];
-  return (data as { price: number | string; promotional_price: number | string | null; collected_at: string }[]).map(
-    (r) => ({
+    .limit(Math.min(2000, productIds.length * perProduct));
+  if (error || !data) return out;
+  for (const r of data as {
+    product_id: string;
+    price: number | string;
+    promotional_price: number | string | null;
+    collected_at: string;
+  }[]) {
+    const list = out.get(r.product_id) ?? [];
+    // collected_at desc já vem ordenado; mantém no máximo perProduct por produto.
+    if (list.length >= perProduct) continue;
+    list.push({
+      productId: r.product_id,
       price: Number(r.promotional_price ?? r.price),
       collected_at: r.collected_at,
-    }),
+    });
+    out.set(r.product_id, list);
+  }
+  return out;
+}
+
+function cheapestOf(latest: LatestPrice[]): LatestPrice | null {
+  if (latest.length === 0) return null;
+  return latest.reduce((a, b) =>
+    (a.promotional_price ?? a.price) <= (b.promotional_price ?? b.price)
+      ? a
+      : b,
   );
 }
 
@@ -222,24 +307,22 @@ export async function biggestDrops(
   supabase: SupabaseClient,
 ): Promise<DealRow[]> {
   const products = await candidateProducts(supabase);
+  if (products.length === 0) return [];
+  const ids = products.map((p) => p.id);
+  const [windows, latestMap] = await Promise.all([
+    pricesWindowBatch(supabase, ids, 30),
+    latestPricesBatch(supabase, ids),
+  ]);
   const deals: DealRow[] = [];
   for (const p of products) {
-    const rows = await pricesWindow(supabase, p.id, 30);
+    const rows = windows.get(p.id) ?? [];
     if (rows.length < 2) continue;
     const current = rows[0].price;
     const avg = rows.reduce((s, r) => s + r.price, 0) / rows.length;
     if (avg <= 0) continue;
     const drop = ((avg - current) / avg) * 100;
     if (drop <= 5) continue;
-    const latest = await latestPrices(supabase, p.id);
-    const cheapest =
-      latest.length > 0
-        ? latest.reduce((a, b) =>
-            (a.promotional_price ?? a.price) <= (b.promotional_price ?? b.price)
-              ? a
-              : b,
-          )
-        : null;
+    const cheapest = cheapestOf(latestMap.get(p.id) ?? []);
     deals.push({
       ...p,
       current,
@@ -257,22 +340,20 @@ export async function nearHistoricLow(
   supabase: SupabaseClient,
 ): Promise<DealRow[]> {
   const products = await candidateProducts(supabase);
+  if (products.length === 0) return [];
+  const ids = products.map((p) => p.id);
+  const [windows, latestMap] = await Promise.all([
+    pricesWindowBatch(supabase, ids, 365, 300),
+    latestPricesBatch(supabase, ids),
+  ]);
   const deals: DealRow[] = [];
   for (const p of products) {
-    const rows = await pricesWindow(supabase, p.id, 365, 300);
+    const rows = windows.get(p.id) ?? [];
     if (rows.length < 2) continue;
     const current = rows[0].price;
     const min = Math.min(...rows.map((r) => r.price));
     if (current > min * 1.05) continue;
-    const latest = await latestPrices(supabase, p.id);
-    const cheapest =
-      latest.length > 0
-        ? latest.reduce((a, b) =>
-            (a.promotional_price ?? a.price) <= (b.promotional_price ?? b.price)
-              ? a
-              : b,
-          )
-        : null;
+    const cheapest = cheapestOf(latestMap.get(p.id) ?? []);
     const over = min > 0 ? ((current - min) / min) * 100 : 0;
     deals.push({
       ...p,

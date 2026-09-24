@@ -1,9 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#15803d"/>
-  <g fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round">
-    <circle cx="256" cy="256" r="36" fill="#ffffff" stroke="none"/>
-    <path d="M256 110v58M256 344v58M110 256h58M344 256h58"/>
-    <circle cx="256" cy="256" r="118"/>
-    <circle cx="256" cy="256" r="150" opacity="0.5"/>
+  <rect width="512" height="512" fill="#0c3b24"/>
+  <g fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round">
+    <circle cx="236" cy="256" r="30" fill="#ffffff" stroke="none"/>
+    <circle cx="236" cy="256" r="92"/>
+    <circle cx="236" cy="256" r="144" opacity="0.45"/>
+  </g>
+  <line x1="236" y1="256" x2="330" y2="162" stroke="#f5b301" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="330" cy="162" r="22" fill="#f5b301"/>
+  <g transform="translate(300,300)">
+    <rect x="-16" y="-48" width="124" height="76" rx="20" fill="#178a4c"/>
+    <text x="46" y="6" text-anchor="middle" font-family="Arial,sans-serif" font-size="48" font-weight="bold" fill="#ffffff">R$</text>
   </g>
 </svg>

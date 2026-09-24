@@ -1,25 +1,36 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ListChecks, Search, TrendingDown, Trophy } from "lucide-react";
+import { Suspense } from "react";
+import { ListChecks, Search, ShoppingCart, TrendingDown, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Price } from "@/components/price";
 import { ProductCard } from "@/components/product-card";
+import { SearchAutocomplete } from "@/components/search-autocomplete";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import {
-  biggestDrops,
-  latestPrices,
-  nearHistoricLow,
-  type DealRow,
-} from "@/lib/catalog/queries";
+import { getCachedDeals } from "@/lib/catalog/cached";
+import { latestPricesBatch, type DealRow } from "@/lib/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Compare preços de supermercados",
   description:
     "MercadoRadar compara preços nos mercados Fort, Koch, Brasil e Komprão para você economizar.",
+};
+
+const PRODUCT_FIELDS = "id, name, slug, brand, unit, quantity, image_url";
+
+type CardProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  brand: string | null;
+  unit: string | null;
+  quantity: number | null;
+  image_url: string | null;
 };
 
 async function Comparador() {
@@ -34,11 +45,12 @@ async function Comparador() {
   const supabase = await createClient();
   const { data: products } = await supabase
     .from("products")
-    .select("id, name, slug, brand, unit, quantity")
+    .select(PRODUCT_FIELDS)
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(5);
-  if (!products || products.length === 0) {
+  const rows = (products ?? []) as CardProduct[];
+  if (rows.length === 0) {
     return (
       <EmptyState
         title="Nenhum produto cadastrado"
@@ -46,12 +58,14 @@ async function Comparador() {
       />
     );
   }
-  const cards = await Promise.all(
-    (products as { id: string; name: string; slug: string; brand: string | null; unit: string | null; quantity: number | null }[]).map(
-      async (p) => ({ product: p, latest: await latestPrices(supabase, p.id) }),
-    ),
+  // 1 round-trip (RPC latest_prices_for_products) — sem N+1.
+  const batch = await latestPricesBatch(
+    supabase,
+    rows.map((p) => p.id),
   );
-  const comPreco = cards.filter((c) => c.latest.length > 0);
+  const comPreco = rows
+    .map((p) => ({ product: p, latest: batch.get(p.id) ?? [] }))
+    .filter((c) => c.latest.length > 0);
   if (comPreco.length === 0) {
     return (
       <EmptyState
@@ -71,6 +85,73 @@ async function Comparador() {
   );
 }
 
+/** Card "Onde comprar hoje": melhor mercado (menor média dos últimos preços). */
+async function OndeComprarHoje() {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = await createClient();
+  const { data: marketsData } = await supabase
+    .from("markets")
+    .select("id, name, slug")
+    .eq("active", true)
+    .order("name");
+  const markets = (marketsData ?? []) as { id: string; name: string; slug: string }[];
+  if (markets.length === 0) return null;
+  const { data: recent } = await supabase
+    .from("prices")
+    .select("market_id, price, promotional_price")
+    .order("collected_at", { ascending: false })
+    .limit(200);
+  const rows = (recent ?? []) as {
+    market_id: string;
+    price: number | string;
+    promotional_price: number | string | null;
+  }[];
+  const sums = new Map<string, { sum: number; n: number }>();
+  for (const r of rows) {
+    const e = sums.get(r.market_id) ?? { sum: 0, n: 0 };
+    e.sum += Number(r.promotional_price ?? r.price);
+    e.n += 1;
+    sums.set(r.market_id, e);
+  }
+  const ranked = markets
+    .filter((m) => (sums.get(m.id)?.n ?? 0) > 0)
+    .map((m) => ({ ...m, avg: sums.get(m.id)!.sum / sums.get(m.id)!.n }))
+    .sort((a, b) => a.avg - b.avg);
+  if (ranked.length === 0) {
+    return (
+      <EmptyState
+        icon={ShoppingCart}
+        title="Sem dados para recomendar"
+        description="Com mais coletas, indicamos aqui o mercado mais barato hoje."
+      />
+    );
+  }
+  const best = ranked[0];
+  return (
+    <Card className="border-2 border-primary">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde comprar hoje
+        </CardTitle>
+        <CardDescription>Menor média dos preços coletados recentemente.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center justify-between gap-2">
+        <span className="flex flex-col gap-1">
+          <Link href={`/mercados/${best.slug}`} className="font-bold hover:underline">
+            {best.name}
+          </Link>
+          <span className="text-xs text-muted-foreground">
+            média de {ranked.length} {ranked.length === 1 ? "mercado" : "mercados"} monitorados
+          </span>
+        </span>
+        <Button asChild size="sm">
+          <Link href={`/mercados/${best.slug}`}>Ver ofertas</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
   if (deals.length === 0) {
     return (
@@ -82,17 +163,20 @@ function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
     );
   }
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="snap-row flex gap-2 overflow-x-auto pb-1 sm:flex-col sm:overflow-visible">
       {deals.map((d) => (
-        <li key={d.id}>
+        <li key={d.id} className="w-56 shrink-0 sm:w-auto">
           <Link
             href={`/produtos/${d.slug}`}
             className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent"
           >
             <span className="flex min-w-0 flex-col">
-              <span className="flex items-center gap-2 truncate text-sm font-medium">
+              <span className="flex items-center gap-2 text-sm font-medium">
                 <span className="truncate">{d.name}</span>
-                <Badge variant="default" className="shrink-0 text-[10px]">
+                <Badge
+                  variant={kind === "drop" ? "default" : "secondary"}
+                  className="shrink-0 text-[10px]"
+                >
                   {kind === "drop" ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
                 </Badge>
               </span>
@@ -108,11 +192,7 @@ function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
 
 async function Ofertas() {
   if (!isSupabaseConfigured()) return null;
-  const supabase = await createClient();
-  const [drops, lows] = await Promise.all([
-    biggestDrops(supabase),
-    nearHistoricLow(supabase),
-  ]);
+  const { drops, lows } = await getCachedDeals();
   if (drops.length === 0 && lows.length === 0) {
     return (
       <EmptyState
@@ -126,13 +206,13 @@ async function Ofertas() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <h3 className="flex items-center gap-2 font-semibold">
-          <TrendingDown className="h-4 w-4 text-primary" /> Maiores quedas
+          <TrendingDown className="h-4 w-4 text-primary" aria-hidden /> Maiores quedas
         </h3>
         <DealList deals={drops} kind="drop" />
       </div>
       <div className="flex flex-col gap-2">
         <h3 className="flex items-center gap-2 font-semibold">
-          <Trophy className="h-4 w-4 text-primary" /> Perto do mínimo histórico
+          <Trophy className="h-4 w-4 text-primary" aria-hidden /> Perto do mínimo histórico
         </h3>
         <DealList deals={lows} kind="low" />
       </div>
@@ -187,24 +267,32 @@ async function Mercados() {
   );
 }
 
+function SectionSkeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="flex flex-col gap-2" aria-hidden>
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} className="shimmer h-16 w-full" />
+      ))}
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col items-start gap-4 py-4">
+      {/* Hero compacto: busca em destaque no topo */}
+      <section className="flex flex-col gap-3 py-2">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Descubra onde sua compra sai <span className="text-primary">mais barata</span>
         </h1>
-        <p className="text-muted-foreground">
-          Compare preços de produtos nos principais mercados da região, monte listas de compras e
-          receba alertas de queda de preço.
-        </p>
+        <SearchAutocomplete />
         <div className="flex flex-wrap gap-2">
-          <Button asChild>
+          <Button variant="outline" asChild size="sm">
             <Link href="/buscar">
-              <Search className="h-4 w-4" /> Buscar produtos
+              <Search className="h-4 w-4" /> Busca avançada
             </Link>
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild size="sm">
             <Link href="/listas">
               <ListChecks className="h-4 w-4" /> Minhas listas
             </Link>
@@ -212,34 +300,44 @@ export default function HomePage() {
         </div>
       </section>
 
+      <Suspense fallback={<Skeleton className="shimmer h-32 w-full rounded-xl" />}>
+        <OndeComprarHoje />
+      </Suspense>
+
       <section className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-primary" /> Comparador
+              <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
             </CardTitle>
             <CardDescription>Último preço por mercado, lado a lado.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Comparador />
+            <Suspense fallback={<SectionSkeleton />}>
+              <Comparador />
+            </Suspense>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-primary" /> Ofertas em destaque
+              <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque
             </CardTitle>
             <CardDescription>Maiores quedas e mínimos históricos.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Ofertas />
+            <Suspense fallback={<SectionSkeleton lines={2} />}>
+              <Ofertas />
+            </Suspense>
           </CardContent>
         </Card>
       </section>
 
       <section>
         <h2 className="mb-3 text-xl font-bold">Mercados monitorados</h2>
-        <Mercados />
+        <Suspense fallback={<SectionSkeleton lines={4} />}>
+          <Mercados />
+        </Suspense>
       </section>
     </div>
   );

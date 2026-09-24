@@ -6,12 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { FavoriteButton } from "@/components/favorite-button";
 import { ProductCard } from "@/components/product-card";
-import { latestPrices } from "@/lib/catalog/queries";
+import { latestPricesBatch } from "@/lib/catalog/queries";
 import { isFavorite } from "@/lib/favorites/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 type Props = { params: Promise<{ slug: string }> };
+
+export const revalidate = 300;
 
 const NOMES: Record<string, string> = {
   fort: "Fort Atacadista",
@@ -75,7 +77,7 @@ export default async function MercadoPage({ params }: Props) {
             <h1 className="text-2xl font-bold">{m.name}</h1>
             {m.city && <p className="text-sm text-muted-foreground">{m.city}</p>}
           </div>
-          <FavoriteButton targetType="market" targetId={m.id} initial={fav} />
+          <FavoriteButton targetType="market" targetId={m.id} initial={fav} label={`Favoritar ${m.name}`} />
         </div>
         <EmptyState
           icon={Store}
@@ -88,13 +90,19 @@ export default async function MercadoPage({ params }: Props) {
 
   const { data: products } = await supabase
     .from("products")
-    .select("id, name, slug, brand, unit, quantity")
+    .select("id, name, slug, brand, unit, quantity, image_url")
     .in("id", productIds);
-  const cards = await Promise.all(
-    ((products ?? []) as { id: string; name: string; slug: string; brand: string | null; unit: string | null; quantity: number | null }[]).map(
-      async (p) => ({ product: p, latest: await latestPrices(supabase, p.id) }),
-    ),
-  );
+  // 1 round-trip (RPC batch) — sem N+1.
+  const batch = await latestPricesBatch(supabase, productIds);
+  const cards = ((products ?? []) as {
+    id: string;
+    name: string;
+    slug: string;
+    brand: string | null;
+    unit: string | null;
+    quantity: number | null;
+    image_url: string | null;
+  }[]).map((p) => ({ product: p, latest: batch.get(p.id) ?? [] }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -103,7 +111,7 @@ export default async function MercadoPage({ params }: Props) {
           <h1 className="text-2xl font-bold">{m.name}</h1>
           {m.city && <p className="text-sm text-muted-foreground">{m.city}</p>}
         </div>
-        <FavoriteButton targetType="market" targetId={m.id} initial={fav} />
+        <FavoriteButton targetType="market" targetId={m.id} initial={fav} label={`Favoritar ${m.name}`} />
       </div>
       <ul className="flex flex-col gap-3">
         {cards.map((c) => (
