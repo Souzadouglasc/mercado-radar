@@ -57,7 +57,7 @@ export function PwaPrompt() {
     <div
       role="region"
       aria-label="Instalar aplicativo"
-      className="fixed inset-x-0 bottom-16 z-40 mx-auto flex max-w-2xl items-center gap-2 px-4 md:bottom-6"
+      className="fixed inset-x-0 bottom-16 z-40 mx-auto flex w-full max-w-full items-center gap-2 px-4 sm:px-6 md:bottom-6 md:max-w-3xl lg:max-w-6xl lg:px-8"
     >
       <div className="flex flex-1 items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-lg">
         <Download className="h-4 w-4 shrink-0 text-primary" aria-hidden />

@@ -113,7 +113,7 @@ export default async function MercadoPage({ params }: Props) {
         </div>
         <FavoriteButton targetType="market" targetId={m.id} initial={fav} label={`Favoritar ${m.name}`} />
       </div>
-      <ul className="flex flex-col gap-3">
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => (
           <li key={c.product.id}>
             <ProductCard product={c.product} latest={c.latest} />

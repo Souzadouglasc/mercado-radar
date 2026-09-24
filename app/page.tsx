@@ -75,7 +75,7 @@ async function Comparador() {
     );
   }
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {comPreco.slice(0, 3).map((c) => (
         <li key={c.product.id}>
           <ProductCard product={c.product} latest={c.latest} />
@@ -127,24 +127,31 @@ async function OndeComprarHoje() {
     );
   }
   const best = ranked[0];
+  const rest = ranked.slice(1, 4);
   return (
-    <Card className="border-2 border-primary">
+    <Card
+      className="border-2 border-primary lg:flex lg:items-center lg:justify-between lg:gap-6 lg:px-2"
+      role="region"
+      aria-label="Onde comprar hoje"
+    >
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde comprar hoje
         </CardTitle>
         <CardDescription>Menor média dos preços coletados recentemente.</CardDescription>
       </CardHeader>
-      <CardContent className="flex items-center justify-between gap-2">
+      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:flex-1">
         <span className="flex flex-col gap-1">
-          <Link href={`/mercados/${best.slug}`} className="font-bold hover:underline">
+          <Link href={`/mercados/${best.slug}`} className="text-lg font-bold hover:underline">
             {best.name}
           </Link>
           <span className="text-xs text-muted-foreground">
             média de {ranked.length} {ranked.length === 1 ? "mercado" : "mercados"} monitorados
+            {rest.length > 0 &&
+              ` · depois: ${rest.map((m) => m.name).join(", ")}`}
           </span>
         </span>
-        <Button asChild size="sm">
+        <Button asChild size="sm" className="w-fit">
           <Link href={`/mercados/${best.slug}`}>Ver ofertas</Link>
         </Button>
       </CardContent>
@@ -163,9 +170,9 @@ function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
     );
   }
   return (
-    <ul className="snap-row flex gap-2 overflow-x-auto pb-1 sm:flex-col sm:overflow-visible">
+    <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {deals.map((d) => (
-        <li key={d.id} className="w-56 shrink-0 sm:w-auto">
+        <li key={d.id}>
           <Link
             href={`/produtos/${d.slug}`}
             className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent"
@@ -223,7 +230,7 @@ async function Ofertas() {
 async function Mercados() {
   if (!isSupabaseConfigured()) {
     return (
-      <ul className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { name: "Fort Atacadista", slug: "fort" },
           { name: "SuperKoch", slug: "koch" },
@@ -251,7 +258,7 @@ async function Mercados() {
     .order("name");
   const markets = (data ?? []) as { name: string; slug: string }[];
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {markets.map((m) => (
         <li key={m.slug}>
           <Link
@@ -280,12 +287,14 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
 export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
-      {/* Hero compacto: busca em destaque no topo */}
-      <section className="flex flex-col gap-3 py-2">
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+      {/* Hero: busca em destaque; no desktop ocupa largura maior */}
+      <section className="flex flex-col gap-4 py-2 lg:py-6">
+        <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
           Descubra onde sua compra sai <span className="text-primary">mais barata</span>
         </h1>
-        <SearchAutocomplete />
+        <div className="w-full lg:max-w-2xl">
+          <SearchAutocomplete />
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild size="sm">
             <Link href="/buscar">
@@ -304,8 +313,8 @@ export default function HomePage() {
         <OndeComprarHoje />
       </Suspense>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        <Card>
+      <section className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
@@ -318,7 +327,7 @@ export default function HomePage() {
             </Suspense>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque

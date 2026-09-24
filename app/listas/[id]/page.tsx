@@ -286,7 +286,7 @@ export default async function ListaPage({ params }: Props) {
           description="Adicione produtos acima para comparar o total da cesta por mercado."
         />
       ) : (
-        <>
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
@@ -321,6 +321,7 @@ export default async function ListaPage({ params }: Props) {
             </CardContent>
           </Card>
 
+          <div className="flex flex-col gap-6">
           <Suspense
             fallback={
               <div className="flex flex-col gap-2" aria-hidden>
@@ -332,7 +333,8 @@ export default async function ListaPage({ params }: Props) {
           >
             <Comparacao listId={lista.id} items={items} />
           </Suspense>
-        </>
+          </div>
+        </div>
       )}
 
       <DeleteListButton id={lista.id} />

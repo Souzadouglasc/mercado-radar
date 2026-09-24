@@ -81,7 +81,7 @@ export default async function FavoritosPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">Meus favoritos</h1>
-      <ul className="flex flex-col gap-3">
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {favs.map((f) => {
           if (f.target_type === "product") {
             const p = productMap.get(f.target_id);

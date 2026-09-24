@@ -52,7 +52,7 @@ async function Resultados({ q }: { q: string }) {
     );
   }
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {resultados.map((r) => (
         <li key={r.id}>
           <ProductCard product={r} latest={r.latest} />

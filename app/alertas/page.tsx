@@ -95,6 +95,7 @@ export default async function AlertasPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">Alertas de preço</h1>
 
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">Meus alertas</h2>
         {alerts.length === 0 ? (
@@ -175,9 +176,10 @@ export default async function AlertasPage() {
         )}
       </section>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground lg:col-span-2">
         Alertas disparam na coleta diária (Fase 5). Sem envio de e-mail nesta versão.
       </p>
+      </div>
     </div>
   );
 }

@@ -258,7 +258,8 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
           description="Lance um preço manual no /admin ou aguarde a coleta automática (Fase 4)."
         />
       ) : (
-        <>
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <div className="flex flex-col gap-6">
           {/* Preços lado a lado com vencedor destacado */}
           <Card className="overflow-hidden">
             <CardHeader className="pb-2">
@@ -317,7 +318,8 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
               </Link>
             </Button>
           </div>
-
+          </div>
+          <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Histórico de preços</CardTitle>
@@ -368,7 +370,8 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
               />
             </CardContent>
           </Card>
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -50,7 +50,7 @@ export default async function ListasPage() {
           description="Crie sua primeira lista acima e adicione produtos para comparar o total por mercado."
         />
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {lists.map((l) => (
             <li key={l.id}>
               <Link href={`/listas/${l.id}`}>
