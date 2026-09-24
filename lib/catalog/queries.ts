@@ -423,3 +423,90 @@ export async function productStats(
     lastUpdate: rows[0].collected_at,
   };
 }
+
+/** 
+ * Busca produtos por categoria + comparação de preço por unidade.
+ * Retorna produtos agrupados por categoria com preço/unit normalizado (R$/kg, R$/L, R$/un).
+ */
+export type CategoryComparisonRow = ProductRow & {
+  latest: LatestPrice[];
+  pricePerUnit: {
+    pricePerUnit: number;
+    baseUnit: 'kg' | 'L' | 'un';
+    label: string;
+  } | null;
+  cheapestMarket?: { slug: string; name: string; price: number; pricePerUnit: number };
+};
+
+export async function searchProductsByCategory(
+  supabase: SupabaseClient,
+  categoryId: string,
+  limit = 50,
+  city?: CityFilter,
+): Promise<CategoryComparisonRow[]> {
+  // Busca produtos da categoria
+  const { data: products, error } = await supabase
+    .from("products")
+    .select(PRODUCT_FIELDS)
+    .eq("category_id", categoryId)
+    .eq("active", true)
+    .order("name")
+    .limit(limit);
+
+  if (error || !products || products.length === 0) return [];
+
+  const rows = products as ProductRow[];
+  const batch = await latestPricesBatch(supabase, rows.map((p) => p.id), city);
+
+  // Importa a função de preço por unidade
+  const { pricePerUnitFromProduct } = await import("./unit-price");
+
+  const result: CategoryComparisonRow[] = rows.map((p) => {
+    const latest = batch.get(p.id) ?? [];
+    const up = pricePerUnitFromProduct(latest[0]?.price ?? 0, p);
+    
+    // Encontra o mercado mais barato (considerando preço promocional)
+    let cheapestMarket: CategoryComparisonRow['cheapestMarket'] = undefined;
+    if (latest.length > 0) {
+      const cheapest = latest.reduce((a, b) => {
+        const pa = a.promotional_price ?? a.price;
+        const pb = b.promotional_price ?? b.price;
+        return pa <= pb ? a : b;
+      });
+      const cheapestUp = pricePerUnitFromProduct(cheapest.promotional_price ?? cheapest.price, p);
+      cheapestMarket = {
+        slug: cheapest.market.slug,
+        name: cheapest.market.name,
+        price: cheapest.promotional_price ?? cheapest.price,
+        pricePerUnit: cheapestUp?.pricePerUnit ?? 0,
+      };
+    }
+
+    return {
+      ...p,
+      latest,
+      pricePerUnit: up,
+      cheapestMarket,
+    };
+  });
+
+  // Ordena por preço por unidade (menor primeiro) onde disponível
+  return result.sort((a, b) => {
+    const ap = a.pricePerUnit?.pricePerUnit ?? Infinity;
+    const bp = b.pricePerUnit?.pricePerUnit ?? Infinity;
+    return ap - bp;
+  });
+}
+
+/** Lista todas as categorias ativas */
+export async function getCategories(
+  supabase: SupabaseClient,
+): Promise<{ id: string; name: string; slug: string; parent_id: string | null }[]> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug, parent_id")
+    .eq("active", true)
+    .order("name");
+  if (error || !data) return [];
+  return data as { id: string; name: string; slug: string; parent_id: string | null }[];
+}
