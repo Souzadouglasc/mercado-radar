@@ -52,7 +52,7 @@ async function postBatch(appUrl: string, secret: string, items: unknown[]) {
       Authorization: `Bearer ${secret}`,
     },
     body: JSON.stringify({ items }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`ingest HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return (await res.json()) as { valid: number; ignored: number; status: string };
@@ -91,7 +91,7 @@ async function main() {
     }
     let valid = 0;
     let ignored = 0;
-    for (const batch of chunk(result.items, 100)) {
+    for (const batch of chunk(result.items, 25)) {
       const r = await postBatch(appUrl, secret, batch);
       valid += r.valid;
       ignored += r.ignored;
