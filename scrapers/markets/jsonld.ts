@@ -67,6 +67,8 @@ export function toProductPrice(input: ToProductPriceInput): ProductPrice | null 
   );
   if (price == null) return null;
   const parsed = normalizeName(jsonld.name);
+  // jsonld.image já normalizado para string única (primeira da array ou string)
+  const imageUrl = jsonld.image?.trim() || null;
   return {
     product_name: jsonld.name.trim().slice(0, 300),
     brand: jsonld.brand?.trim()?.slice(0, 120) || null,
@@ -79,5 +81,6 @@ export function toProductPrice(input: ToProductPriceInput): ProductPrice | null 
     source_url: sourceUrl,
     source: "site-jsonld",
     collected_at: collectedAt,
+    image_url: imageUrl,
   };
 }

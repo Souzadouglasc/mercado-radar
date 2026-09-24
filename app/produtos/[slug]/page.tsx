@@ -21,6 +21,7 @@ import {
   productStats,
   type HistoryRange,
 } from "@/lib/catalog/queries";
+import { pricePerUnitFromProduct } from "@/lib/catalog/unit-price";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { isFavorite } from "@/lib/favorites/actions";
@@ -269,6 +270,7 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
               <ul className="grid gap-2 sm:grid-cols-2">
                 {sorted.map((x) => {
                   const winner = cheapest?.market_id === x.market_id;
+                  const up = pricePerUnitFromProduct(effective(x), p);
                   return (
                     <li
                       key={x.market_id}
@@ -293,6 +295,11 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
                           </s>
                         )}
                         <Price value={effective(x)} size={winner ? "lg" : "md"} className={winner ? "text-primary" : undefined} />
+                        {up && (
+                          <span className="text-sm text-muted-foreground font-normal">
+                            {up.label}
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {new Date(x.collected_at).toLocaleString("pt-BR")}

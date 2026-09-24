@@ -9,6 +9,8 @@ export type Market = {
   active: boolean;
 };
 
+export type CityFilter = string | null; // null = todas
+
 export type LatestPrice = {
   product_id: string;
   market_id: string;
@@ -54,17 +56,21 @@ function toLatest(row: RpcLatestRow): LatestPrice {
  * Último preço por mercado para N produtos em 1 round-trip
  * (RPC latest_prices_for_products — DISTINCT ON (product_id, market_id)).
  * Fallback para a query ordenada caso a migration 0003 ainda não tenha sido aplicada.
+ * Opcional: filtra por cidade do mercado.
  */
 export async function latestPricesBatch(
   supabase: SupabaseClient,
   productIds: string[],
+  city?: CityFilter,
 ): Promise<Map<string, LatestPrice[]>> {
   const out = new Map<string, LatestPrice[]>();
   if (productIds.length === 0) return out;
+
+  // Tenta RPC primeiro (sem filtro de cidade no RPC atual; fallback faz o filtro)
   const { data, error } = await supabase.rpc("latest_prices_for_products", {
     p_ids: productIds,
   });
-  if (!error && data) {
+  if (!error && data && !city) {
     for (const r of data as RpcLatestRow[]) {
       const list = out.get(r.product_id) ?? [];
       list.push(toLatest(r));
@@ -72,15 +78,23 @@ export async function latestPricesBatch(
     }
     return out;
   }
-  // Fallback: 1 query ordenada + dedup no JS (sem N+1).
-  const { data: rows } = await supabase
+
+  // Fallback: 1 query ordenada + dedup no JS (sem N+1), com filtro de cidade opcional
+  let query = supabase
     .from("prices")
     .select(
-      "product_id, market_id, price, promotional_price, collected_at, market:markets(id, name, slug)",
+      "product_id, market_id, price, promotional_price, collected_at, market:markets!inner(id, name, slug, city)",
     )
     .in("product_id", productIds)
+    .eq("markets.active", true)
     .order("collected_at", { ascending: false })
     .limit(Math.min(500, productIds.length * 20));
+
+  if (city) {
+    query = query.eq("markets.city", city);
+  }
+
+  const { data: rows } = await query;
   const seen = new Set<string>();
   for (const row of (rows ?? []) as unknown as (Omit<LatestPrice, "market"> & {
     market: LatestPrice["market"] | LatestPrice["market"][];
@@ -116,11 +130,12 @@ export async function latestPrices(
 
 const PRODUCT_FIELDS = "id, name, slug, brand, unit, quantity, image_url";
 
-/** Busca full-text pt-BR (RPC search_products_ft) + fallback ilike. */
+/** Busca full-text pt-BR (RPC search_products_ft) + fallback ilike. Com filtro opcional por cidade. */
 export async function searchProducts(
   supabase: SupabaseClient,
   q: string,
   limit = 20,
+  city?: CityFilter,
 ): Promise<(ProductRow & { latest: LatestPrice[] })[]> {
   const term = q.trim().slice(0, 80);
   if (!term) return [];
@@ -128,6 +143,7 @@ export async function searchProducts(
   const { data: ft, error: ftError } = await supabase.rpc("search_products_ft", {
     p_term: term,
     p_limit: limit,
+    p_city: city ?? null,
   });
   if (!ftError && ft) {
     rows = (ft as (ProductRow & { rank: number })[]).map(
@@ -135,14 +151,23 @@ export async function searchProducts(
       ({ rank, ...p }) => p,
     );
   } else {
-    // Fallback: comportamento anterior (ilike).
-    const { data: products, error } = await supabase
+    // Fallback: comportamento anterior (ilike) com filtro de cidade via join
+    let query = supabase
       .from("products")
       .select(PRODUCT_FIELDS)
       .eq("active", true)
       .or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
       .order("name")
       .limit(limit);
+    if (city) {
+      // Join com markets via prices para filtrar por cidade
+      query = query.filter("id", "in", `(
+        select distinct product_id from prices p
+        join markets m on m.id = p.market_id
+        where m.city = '${city.replace(/'/g, "''")}' and m.active
+      )`);
+    }
+    const { data: products, error } = await query;
     if (error || !products) return [];
     rows = products as ProductRow[];
   }
@@ -150,6 +175,7 @@ export async function searchProducts(
   const batch = await latestPricesBatch(
     supabase,
     rows.map((p) => p.id),
+    city,
   );
   return rows.map((p) => ({ ...p, latest: batch.get(p.id) ?? [] }));
 }

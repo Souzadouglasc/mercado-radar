@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FavoriteButton } from "@/components/favorite-button";
 import { Price } from "@/components/price";
 import { marketColor, type LatestPrice, type ProductRow } from "@/lib/catalog/queries";
+import { pricePerUnitFromProduct } from "@/lib/catalog/unit-price";
 
 export function ProductCard({
   product,
@@ -114,7 +115,17 @@ export function ProductCard({
                         </Badge>
                       )}
                     </span>
-                    <Price value={effective(p)} className={isCheapest ? "text-primary" : undefined} />
+                    <span className="flex items-baseline gap-1.5">
+                      <Price value={effective(p)} className={isCheapest ? "text-primary" : undefined} />
+                      {(() => {
+                        const up = pricePerUnitFromProduct(effective(p), product);
+                        return up ? (
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {up.label}
+                          </span>
+                        ) : null;
+                      })()}
+                    </span>
                   </span>
                   {/* Barra comparativa de preços por mercado */}
                   <span

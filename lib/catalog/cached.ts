@@ -39,9 +39,10 @@ export const getCachedDeals = unstable_cache(
 export const getCachedSearch = unstable_cache(
   async (
     q: string,
+    city?: string,
   ): Promise<(ProductRow & { latest: LatestPrice[] })[]> => {
     if (!configured()) return [];
-    return searchProducts(createPublicClient(), q);
+    return searchProducts(createPublicClient(), q, 20, city ?? undefined);
   },
   ["catalog-search"],
   { revalidate: 300, tags: ["catalog"] },
