@@ -1,34 +1,15 @@
 #!/usr/bin/env node
 /**
  * CLI: tsx scrapers/runner/run.ts --market fort --limit 200 [--dry-run] [--concurrency 4] [--incremental|--full] [--skip N]
- * Coleta via provider Osuper e envia em batches de 100 p/ POST /api/ingest/prices.
- * Exit 1 se products_found < 30% da baseline OU taxa de erro > 50%.
+ * Nova versão usa Orchestrator + Provider Registry.
+ * Mantém compatibilidade com flags antigas.
  */
-import { toRunStats } from "../core/types.js";
-import { fortConfig } from "../markets/fort.js";
-import { kochConfig } from "../markets/koch.js";
-import { scrapeOsuperMarket, type OsuperMarketConfig, DEFAULT_THROTTLE_MS } from "../markets/osuper.js";
-import { scrapeWordPressEncartes, type WordPressMarketConfig } from "../markets/brasil.js";
-import { scrapeKompraoOfertas, type KompraoMarketConfig } from "../markets/komprao.js";
 
-const MARKETS: Record<string, OsuperMarketConfig | WordPressMarketConfig | KompraoMarketConfig> = {
-  fort: fortConfig,
-  koch: kochConfig,
-  brasil: {
-    marketSlug: "brasil",
-    siteUrl: "https://www.brasilatacadista.com.br",
-    wpJsonUrl: "https://www.brasilatacadista.com.br/wp-json",
-  },
-  komprao: {
-    marketSlug: "komprao",
-    siteUrl: "https://komprao.com.br",
-    wpJsonUrl: "https://komprao.com.br/wp-json",
-    city: "sao-jose",
-  },
-};
+import "dotenv/config";
+import { createServiceRoleClient } from "../lib/supabase.js";
+import { createOrchestrator, type OrchestratorOptions } from "./orchestrator.js";
+import { getEnabledSlugs, getMarketConfig } from "../config/markets.config.js";
 
-// Baseline: mediana de 7 dias de products_found. Seed = limit default até haver histórico.
-// TODO: ler baseline real de scrape_runs via Supabase quando houver histórico.
 const BASELINE_PRODUCTS_FOUND = 200;
 
 function parseArgs(argv: string[]) {
@@ -46,6 +27,7 @@ function parseArgs(argv: string[]) {
   }
   return {
     market: String(args.market ?? ""),
+    markets: args.markets ? String(args.markets).split(",").map(s => s.trim()) : [],
     limit: args.limit != null ? Number(args.limit) : 200,
     dryRun: args["dry-run"] === true,
     concurrency: args.concurrency != null ? Number(args.concurrency) : 4,
@@ -55,35 +37,29 @@ function parseArgs(argv: string[]) {
   };
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
-async function postBatch(appUrl: string, secret: string, items: unknown[]) {
-  const res = await fetch(`${appUrl.replace(/\/$/, "")}/api/ingest/prices`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify({ items }),
-    signal: AbortSignal.timeout(180_000),
-  });
-  if (!res.ok) throw new Error(`ingest HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return (await res.json()) as { valid: number; ignored: number; status: string };
-}
-
 async function main() {
-  const { market, limit, dryRun, concurrency, incremental, full, skip } = parseArgs(
+  const { market, markets, limit, dryRun, concurrency, incremental, full, skip } = parseArgs(
     process.argv.slice(2),
   );
-  const config = MARKETS[market];
-  if (!config) {
-    console.error(`Mercado desconhecido: "${market}". Use --market fort|koch|brasil|komprao.`);
-    process.exit(2);
+
+  // Determina quais mercados processar
+  let targetMarkets: string[];
+  if (markets.length > 0) {
+    targetMarkets = markets;
+  } else if (market) {
+    targetMarkets = [market];
+  } else {
+    targetMarkets = getEnabledSlugs();
   }
+
+  // Valida mercados
+  for (const m of targetMarkets) {
+    if (!getMarketConfig(m)) {
+      console.error(`Mercado desconhecido: "${m}". Use: ${getEnabledSlugs().join("|")}`);
+      process.exit(2);
+    }
+  }
+
   if (!Number.isFinite(limit) || limit < 1 || limit > 2000) {
     console.error(`--limit inválido: ${limit}. Use 1..2000.`);
     process.exit(2);
@@ -98,71 +74,89 @@ async function main() {
   }
 
   console.log(
-    `[run] market=${market} limit=${limit} dryRun=${dryRun} concurrency=${concurrency} incremental=${incremental} full=${full} skip=${skip}`,
+    `[run] markets=${targetMarkets.join(",")} limit=${limit} dryRun=${dryRun} concurrency=${concurrency} incremental=${incremental} full=${full} skip=${skip}`,
   );
 
-  let result: Awaited<ReturnType<typeof scrapeOsuperMarket>>;
-  if ("apiUrl" in config) {
-    // Osuper markets (Fort, Koch)
-    result = await scrapeOsuperMarket(config as OsuperMarketConfig, {
+  // Cria orchestrator
+  const supabase = createServiceRoleClient();
+  const orchestrator = await createOrchestrator({
+    markets: targetMarkets,
+    collectOptions: {
       limit,
-      concurrency,
       incremental,
       full,
       skip,
-      onProgress: (done, total, url) => {
-        if (done % 25 === 0 || done === total) console.log(`[run] ${done}/${total} ${url}`);
-      },
-    });
-  } else if ("wpJsonUrl" in config && "city" in config) {
-    // Komprão
-    result = await scrapeKompraoOfertas(config as KompraoMarketConfig, { limit, throttleMs: DEFAULT_THROTTLE_MS });
-  } else if ("wpJsonUrl" in config) {
-    // Brasil Atacadista
-    result = await scrapeWordPressEncartes(config as WordPressMarketConfig, { limit, throttleMs: DEFAULT_THROTTLE_MS });
-  } else {
-    console.error(`Configuração de mercado desconhecida para: ${market}`);
-    process.exit(2);
-  }
+      concurrency,
+      throttleMs: 2000,
+    },
+    dryRun,
+    onLog: (msg) => console.log(msg),
+  });
 
-  const stats = toRunStats(result);
-  console.log(
-    JSON.stringify({ ...stats, errors: result.outcomes.filter((o) => !o.ok).slice(0, 10) }),
-  );
+  // Executa
+  const results = await orchestrator.runAll();
 
-  if (!dryRun) {
-    const appUrl = process.env.APP_URL;
-    const secret = process.env.CRON_SECRET;
-    if (!appUrl || !secret) {
-      console.error("[run] APP_URL e CRON_SECRET são obrigatórios (sem --dry-run).");
-      process.exit(2);
+  // Verifica gates de qualidade e exit code
+  let hasFailure = false;
+  let hasQualityWarning = false;
+
+  for (const result of results) {
+    if (!result.success) {
+      console.error(`[run] ${result.marketSlug} FALHOU: ${result.error}`);
+      hasFailure = true;
+      continue;
     }
-    let valid = 0;
-    let ignored = 0;
-    for (const batch of chunk(result.items, 25)) {
-      const r = await postBatch(appUrl, secret, batch);
-      valid += r.valid;
-      ignored += r.ignored;
-      console.log(`[run] batch ok: valid=${r.valid} ignored=${r.ignored} status=${r.status}`);
-    }
-    console.log(JSON.stringify({ sent: result.items.length, valid, ignored }));
-  } else {
-    console.log(JSON.stringify({ dryRun: true, sample: result.items.slice(0, 5) }, null, 2));
-  }
 
-  // Gates de qualidade (só para Osuper que tem baseline)
-  if ("apiUrl" in config) {
-    const belowBaseline = stats.productsFound < 0.3 * Math.min(BASELINE_PRODUCTS_FOUND, limit);
-    if (belowBaseline) {
+    const marketConfig = getMarketConfig(result.marketSlug);
+    const baseline = marketConfig?.baseline ?? { minProducts: 100, maxErrorRate: 0.5 };
+
+    // Quality gates (apenas para providers com baseline significativa)
+    const belowBaseline = result.collectResult.items.length < 0.3 * Math.min(baseline.minProducts, limit);
+    if (belowBaseline && baseline.minProducts > 10) {
       console.error(
-        `[run] FAIL: products_found=${stats.productsFound} < 30% da baseline (${Math.min(BASELINE_PRODUCTS_FOUND, limit)}).`,
+        `[run] ${result.marketSlug} QUALITY WARNING: products_found=${result.collectResult.items.length} < 30% da baseline (${Math.min(baseline.minProducts, limit)}).`
       );
-      process.exit(1);
+      hasQualityWarning = true;
     }
-    if (stats.errorRate > 0.5) {
-      console.error(`[run] FAIL: taxa de erro=${(stats.errorRate * 100).toFixed(1)}% > 50%.`);
-      process.exit(1);
+    if (result.collectResult.stats.errorRate > baseline.maxErrorRate) {
+      console.error(
+        `[run] ${result.marketSlug} QUALITY WARNING: taxa de erro=${(result.collectResult.stats.errorRate * 100).toFixed(1)}% > ${(baseline.maxErrorRate * 100).toFixed(0)}%.`
+      );
+      hasQualityWarning = true;
     }
+
+    // Log compatível com formato antigo
+    console.log(
+      JSON.stringify({
+        ...result.collectResult.stats,
+        errors: result.collectResult.outcomes.filter((o) => !o.ok).slice(0, 10),
+      }),
+    );
+
+    if (result.ingestResult) {
+      console.log(
+        JSON.stringify({
+          sent: result.collectResult.items.length,
+          valid: result.ingestResult.valid,
+          ignored: result.ingestResult.ignored,
+          created: result.ingestResult.created,
+          status: result.ingestResult.status,
+          run_id: result.ingestResult.runId,
+        }),
+      );
+    } else {
+      console.log(
+        JSON.stringify({ dryRun: true, sample: result.collectResult.items.slice(0, 5) }, null, 2)
+      );
+    }
+  }
+
+  // Exit codes: 0=ok, 1=quality warning, 2=usage/env, 3=failure
+  if (hasFailure) {
+    process.exit(3);
+  }
+  if (hasQualityWarning) {
+    process.exit(1);
   }
   console.log("[run] OK");
 }
