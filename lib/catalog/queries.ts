@@ -510,3 +510,138 @@ export async function getCategories(
   if (error || !data) return [];
   return data as { id: string; name: string; slug: string; parent_id: string | null }[];
 }
+
+/** Busca categoria canônica por slug */
+export async function getCategoryBySlug(
+  supabase: SupabaseClient,
+  slug: string,
+): Promise<{ id: string; name: string; slug: string; parent_id: string | null; image_url: string | null } | null> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug, parent_id, image_url")
+    .eq("slug", slug)
+    .eq("active", true)
+    .single();
+  if (error || !data) return null;
+  return data as { id: string; name: string; slug: string; parent_id: string | null; image_url: string | null };
+}
+
+/** Busca categoria canônica por ID */
+export async function getCategoryById(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<{ id: string; name: string; slug: string; parent_id: string | null; image_url: string | null } | null> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug, parent_id, image_url")
+    .eq("id", id)
+    .eq("active", true)
+    .single();
+  if (error || !data) return null;
+  return data as { id: string; name: string; slug: string; parent_id: string | null; image_url: string | null };
+}
+
+/** Busca produtos de canonical_products por category_id com preços */
+export async function getProductsByCategory(
+  supabase: SupabaseClient,
+  categoryId: string,
+  limit = 50,
+  city?: CityFilter,
+): Promise<CategoryComparisonRow[]> {
+  // Busca produtos da categoria em canonical_products
+  const { data: products, error } = await supabase
+    .from("canonical_products")
+    .select("id, canonical_name, slug, brand, barcode, unit, quantity, normalized_unit, normalized_quantity, image_url")
+    .eq("category_id", categoryId)
+    .eq("active", true)
+    .order("canonical_name")
+    .limit(limit);
+
+  if (error || !products || products.length === 0) return [];
+
+  const rows = products as {
+    id: string;
+    canonical_name: string;
+    slug: string;
+    brand: string | null;
+    barcode: string | null;
+    unit: string | null;
+    quantity: number | null;
+    normalized_unit: "kg" | "L" | "un" | null;
+    normalized_quantity: number | null;
+    image_url: string | null;
+  }[];
+
+  const batch = await latestPricesBatch(supabase, rows.map((p) => p.id), city);
+
+  // Importa a função de preço por unidade
+  const { pricePerUnitFromProduct } = await import("./unit-price");
+
+  const result: CategoryComparisonRow[] = rows.map((p) => {
+    const latest = batch.get(p.id) ?? [];
+    
+    // Usa preço do produto mais barato para calcular R$/un
+    let cheapestPrice = 0;
+    if (latest.length > 0) {
+      cheapestPrice = latest.reduce((a, b) => {
+        const pa = a.promotional_price ?? a.price;
+        const pb = b.promotional_price ?? b.price;
+        return pa <= pb ? a : b;
+      }).promotional_price ?? latest[0].price;
+    }
+
+    const up = pricePerUnitFromProduct(cheapestPrice || 0, { 
+      quantity: p.normalized_quantity ?? p.quantity, 
+      unit: p.normalized_unit ?? p.unit 
+    });
+
+    // Encontra o mercado mais barato (considerando preço promocional)
+    let cheapestMarket: CategoryComparisonRow['cheapestMarket'] = undefined;
+    if (latest.length > 0) {
+      const cheapest = latest.reduce((a, b) => {
+        const pa = a.promotional_price ?? a.price;
+        const pb = b.promotional_price ?? b.price;
+        return pa <= pb ? a : b;
+      });
+      const cheapestUp = pricePerUnitFromProduct(cheapest.promotional_price ?? cheapest.price, {
+        quantity: p.normalized_quantity ?? p.quantity,
+        unit: p.normalized_unit ?? p.unit,
+      });
+      cheapestMarket = {
+        slug: cheapest.market.slug,
+        name: cheapest.market.name,
+        price: cheapest.promotional_price ?? cheapest.price,
+        pricePerUnit: cheapestUp?.pricePerUnit ?? 0,
+      };
+    }
+
+    return {
+      id: p.id,
+      name: p.canonical_name,
+      slug: p.slug,
+      brand: p.brand,
+      unit: p.unit,
+      quantity: p.quantity,
+      image_url: p.image_url,
+      latest,
+      pricePerUnit: up,
+      cheapestMarket,
+    };
+  });
+
+  // Ordena por preço por unidade (menor primeiro) onde disponível
+  return result.sort((a, b) => {
+    const ap = a.pricePerUnit?.pricePerUnit ?? Infinity;
+    const bp = b.pricePerUnit?.pricePerUnit ?? Infinity;
+    return ap - bp;
+  });
+}
+
+/** Busca preços em lote para produtos canônicos */
+export async function latestPricesForCanonicalProducts(
+  supabase: SupabaseClient,
+  canonicalIds: string[],
+  city?: CityFilter,
+): Promise<Map<string, LatestPrice[]>> {
+  return latestPricesBatch(supabase, canonicalIds, city);
+}

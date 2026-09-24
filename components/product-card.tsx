@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { TrendingDown, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -11,13 +9,23 @@ import { marketColor, type LatestPrice, type ProductRow } from "@/lib/catalog/qu
 import { pricePerUnitFromProduct } from "@/lib/catalog/unit-price";
 import { cn } from "@/lib/utils";
 
+export type CanonicalProduct = {
+  id: string;
+  canonical_name: string;
+  slug: string;
+  brand: string | null;
+  unit: string | null;
+  quantity: number | null;
+  image_url: string | null;
+};
+
 export function ProductCard({
   product,
   latest,
   favorite,
   variant = "default",
 }: {
-  product: ProductRow;
+  product: ProductRow | CanonicalProduct;
   latest: LatestPrice[];
   favorite?: boolean;
   variant?: "default" | "compact";
@@ -40,6 +48,9 @@ export function ProductCard({
 
   const isCompact = variant === "compact";
 
+  // Get product name (handles both ProductRow and CanonicalProduct)
+  const productName = "canonical_name" in product ? product.canonical_name : product.name;
+
   return (
     <Card
       className={cn(
@@ -58,13 +69,13 @@ export function ProductCard({
             >
               <ProductImage
                 image_url={product.image_url}
-                product={{ name: product.name, brand: product.brand }}
+                product={{ name: productName, brand: product.brand }}
                 aspect="square"
                 className="h-14 w-14 shrink-0"
-                alt={product.name}
+                alt={productName}
               />
               <span className="min-w-0">
-                <span className="block truncate font-medium">{product.name}</span>
+                <span className="block truncate font-medium">{productName}</span>
                 {product.brand && (
                   <span className="block truncate text-xs font-normal text-muted-foreground">
                     {product.brand}
@@ -77,7 +88,7 @@ export function ProductCard({
                 targetType="product"
                 targetId={product.id}
                 initial={favorite}
-                label={`Favoritar ${product.name}`}
+                label={`Favoritar ${productName}`}
               />
             )}
           </CardTitle>
