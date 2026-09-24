@@ -75,14 +75,14 @@ function ProductGridSkeleton() {
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, i) => (
         <li key={i}>
-          <Card className="p-4 card-elevated">
-            <div className="shimmer-fancy h-14 w-14 rounded-xl mb-3" />
-            <div className="shimmer-fancy h-4 w-3/4 mb-2" />
-            <div className="shimmer-fancy h-3 w-1/2 mb-4" />
-            <div className="space-y-2">
-              <div className="shimmer-fancy h-3 w-full" />
-              <div className="shimmer-fancy h-3 w-2/3" />
-              <div className="shimmer-fancy h-3 w-1/2" />
+          <Card className="p-4 card-hover-elevated product-highlight">
+            <div className="shimmer-pronto h-14 w-14 rounded-xl mb-3" />
+            <div className="shimmer-pronto h-5 w-3/4 mb-2" />
+            <div className="shimmer-pronto h-4 w-1/2 mb-4" />
+            <div className="space-y-3">
+              <div className="shimmer-pronto h-4 w-full" />
+              <div className="shimmer-pronto h-4 w-2/3" />
+              <div className="shimmer-pronto h-4 w-1/2" />
             </div>
           </Card>
         </li>
@@ -190,39 +190,53 @@ async function CategoryContent({
   return (
     <div className="flex flex-col gap-6">
       {/* Hero com nome da categoria + ícone */}
-      <Card className="overflow-hidden hero-card">
-        <CardContent className="pt-6 pb-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
+      <Card className="overflow-hidden hero-card card-hover-elevated">
+        <CardContent className="pt-6 pb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div className="flex items-center gap-6">
               {category.image_url && (
-                <div className="h-16 w-16 lg:h-20 lg:w-20 shrink-0 rounded-xl overflow-hidden bg-muted border border-border/50">
+                <div className="relative h-24 w-24 lg:h-32 lg:w-32 shrink-0 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-lg shadow-primary/20">
                   <img
                     src={category.image_url}
                     alt={category.name}
                     className="h-full w-full object-cover fade-in"
                   />
+                  {/* Brilho sutil na borda */}
+                  <div className="absolute inset-0 rounded-2xl ring-2 ring-inset ring-primary/30" />
                 </div>
               )}
               <div className="fade-in-slow">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <Tag className="h-4 w-4 text-primary" aria-hidden />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <Tag className="h-5 w-5 text-primary" aria-hidden />
                   <span>Categoria</span>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold leading-tight">{category.name}</h1>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h1 className="text-3xl lg:text-4xl font-bold leading-tight">
+                  {category.name}
+                </h1>
+                <p className="text-base text-muted-foreground mt-1">
                   {products.length} produto{products.length !== 1 ? "s" : ""} encontrado{products.length !== 1 ? "s" : ""}
                 </p>
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="lg"
+                className="btn-primary-custom border-none text-white"
+              >
+                <Filter className="h-4 w-4" />
+                Filtrar
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Hero gradient background */}
-      <div className="hero-gradient-inset" />
+      <div className="hero-banner-minimal" />
 
       {/* Filtros */}
-      <Card>
+      <Card className="hero-card">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">

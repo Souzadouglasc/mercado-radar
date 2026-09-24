@@ -261,7 +261,11 @@ function Resultados({ q, city, group, sort }: { q: string; city: CityFilter; gro
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {resultados.map((r) => (
         <li key={r.id}>
-          <ProductCard product={r} latest={r.latest} />
+          <ProductCard
+            product={r}
+            latest={r.latest}
+            variant="default"
+          />
         </li>
       ))}
     </ul>
@@ -280,20 +284,20 @@ export default async function BuscarPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold fade-in">
+      <h1 className="text-3xl lg:text-4xl font-bold fade-in text-gradient">
         {q ? `Resultados para “${q}”` : "Buscar produtos"}
       </h1>
 
       {/* Hero gradient background */}
-      <div className="hero-gradient-inset" />
+      <div className="hero-banner-minimal" />
 
       {/* Header de filtros */}
-      <Card className="hero-card">
-        <CardContent className="pt-6">
+      <Card className="hero-card card-hover-elevated">
+        <CardContent className="pt-6 pb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Busca */}
             <div className="flex-1 sm:max-w-md">
-              <Suspense fallback={<Skeleton className="shimmer h-10 w-full" />}>
+              <Suspense fallback={<Skeleton className="shimmer-pronto h-12 w-full rounded-xl" />}>
                 <SearchAutocomplete />
               </Suspense>
             </div>
@@ -333,7 +337,7 @@ export default async function BuscarPage({
                   params.set("sort", sortValue);
                   window.location.href = `/buscar?${params.toString()}`;
                 }}
-                className="gap-1.5"
+                className="gap-1.5 btn-primary-custom border-none text-white"
               >
                 <Layers className="h-4 w-4" />
                 Agrupar variações
@@ -366,10 +370,10 @@ export default async function BuscarPage({
 
       <Suspense
         fallback={
-          <div className="flex flex-col gap-2" aria-hidden>
-            <Skeleton className="shimmer h-24 w-full" />
-            <Skeleton className="shimmer h-24 w-full" />
-            <Skeleton className="shimmer h-24 w-full" />
+          <div className="flex flex-col gap-3" aria-hidden>
+            <div className="shimmer-pronto h-28 w-full rounded-xl" />
+            <div className="shimmer-pronto h-28 w-full rounded-xl" />
+            <div className="shimmer-pronto h-28 w-full rounded-xl" />
           </div>
         }
       >

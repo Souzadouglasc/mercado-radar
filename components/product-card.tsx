@@ -47,6 +47,7 @@ export function ProductCard({
       : 0;
 
   const isCompact = variant === "compact";
+  const isCheapest = cheapest?.market_id === sorted[0]?.market_id;
 
   // Get product name (handles both ProductRow and CanonicalProduct)
   const productName = "canonical_name" in product ? product.canonical_name : product.name;
@@ -54,13 +55,22 @@ export function ProductCard({
   return (
     <Card
       className={cn(
-        "group transition-all duration-200 card-elevated",
-        isCompact && "p-3",
-        !isCompact && "p-4",
+        "group relative transition-all duration-300 card-hover-elevated product-highlight",
+        isCompact && "p-4",
+        !isCompact && "p-5",
       )}
     >
+      {/* Badge menor preço com borda dourada */}
+      {isCheapest && !isCompact && (
+        <div className="absolute -top-2 -right-2 z-10">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gold shadow-lg ring-4 ring-card">
+            <Trophy className="h-4 w-4 text-white" aria-hidden />
+          </div>
+        </div>
+      )}
+
       {!isCompact && (
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-4">
           <CardTitle className="flex items-start justify-between gap-2 text-base">
             <Link
               href={`/produtos/${product.slug}`}
@@ -70,11 +80,11 @@ export function ProductCard({
                 image_url={product.image_url}
                 product={{ name: productName, brand: product.brand }}
                 aspect="square"
-                className="h-14 w-14 shrink-0"
+                className="h-16 w-16 shrink-0 rounded-xl overflow-hidden border border-primary/20"
                 alt={productName}
               />
               <span className="min-w-0">
-                <span className="block truncate font-medium">{productName}</span>
+                <span className="block truncate font-semibold">{productName}</span>
                 {product.brand && (
                   <span className="block truncate text-xs font-normal text-muted-foreground">
                     {product.brand}
@@ -82,6 +92,12 @@ export function ProductCard({
                 )}
               </span>
             </Link>
+            {discountVsAvg >= 5 && cheapest && (
+              <Badge variant="secondary" className="gap-1 text-[10px] text-offer shimmer-pronto px-2 py-1">
+                <TrendingDown className="h-3 w-3" aria-hidden />
+                {discountVsAvg}% abaixo da média
+              </Badge>
+            )}
             {favorite !== undefined && (
               <FavoriteButton
                 targetType="product"
@@ -93,7 +109,7 @@ export function ProductCard({
           </CardTitle>
           {discountVsAvg >= 5 && cheapest && (
             <p className="pt-1">
-              <Badge variant="secondary" className="gap-1 text-[10px] text-offer">
+              <Badge variant="secondary" className="gap-1 text-[10px] text-offer bg-offer/10 border-offer/20">
                 <TrendingDown className="h-3 w-3" aria-hidden />
                 {discountVsAvg}% abaixo da média
               </Badge>
@@ -106,7 +122,7 @@ export function ProductCard({
         {sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem preços ainda.</p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {sorted.map((p) => {
               const isCheapest = cheapest?.market_id === p.market_id;
               const pct = max > 0 ? Math.max(6, (effective(p) / max) * 100) : 0;
@@ -125,15 +141,16 @@ export function ProductCard({
                       >
                         {p.market.name}
                       </Link>
+                      {/* Menor preço com borda gold */}
                       {isCheapest && (
-                        <Badge variant="default" className="text-[10px] gap-1">
+                        <Badge variant="default" className="text-[10px] gap-1 border-gold bg-gold/10 text-gold">
                           <Trophy className="h-3 w-3" aria-hidden />
                           Menor preço
                         </Badge>
                       )}
                     </span>
                     <span className="flex items-baseline gap-1.5">
-                      <Price value={effective(p)} className={isCheapest ? "text-primary" : undefined} />
+                      <Price value={effective(p)} className={isCheapest ? "text-gold font-bold" : undefined} />
                       {(() => {
                         const up = pricePerUnitFromProduct(effective(p), product);
                         return up ? (
@@ -147,14 +164,14 @@ export function ProductCard({
                   {/* Barra comparativa de preços por mercado */}
                   <span
                     aria-hidden
-                    className="h-1.5 overflow-hidden rounded-full bg-muted"
+                    className="h-2 overflow-hidden rounded-full bg-muted/60"
                   >
                     <span
-                      className="block h-full rounded-full"
+                      className="block h-full rounded-full transition-all duration-300"
                       style={{
                         width: `${pct}%`,
                         backgroundColor: isCheapest
-                          ? "hsl(var(--primary))"
+                          ? "hsl(var(--gold-gradient-start))"
                           : marketColor(p.market.slug, 0),
                         opacity: isCheapest ? 1 : 0.55,
                       }}

@@ -328,9 +328,9 @@ async function Mercados() {
 
 function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="flex flex-col gap-2" aria-hidden>
+    <div className="flex flex-col gap-3" aria-hidden>
       {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="shimmer-fancy h-16 w-full" />
+        <div key={i} className="shimmer-pronto h-20 w-full" />
       ))}
     </div>
   );
@@ -339,23 +339,23 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
 function HeroSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-hidden>
-      <div className="shimmer-fancy h-10 w-3/4" />
-      <div className="shimmer-fancy h-12 w-full lg:max-w-2xl" />
-      <div className="shimmer-fancy h-10 w-full" />
+      <div className="shimmer-pronto h-12 w-3/4" />
+      <div className="shimmer-pronto h-14 w-full lg:max-w-2xl" />
+      <div className="shimmer-pronto h-12 w-full" />
     </div>
   );
 }
 
 function OndeComprarSkeleton() {
   return (
-    <Card className="border-2 border-primary card-elevated">
-      <CardHeader className="pb-2">
-        <div className="shimmer-fancy h-6 w-48" />
-        <div className="shimmer-fancy h-4 w-64" />
+    <Card className="border-2 border-primary card-hover-elevated">
+      <CardHeader className="pb-4">
+        <div className="shimmer-pronto h-7 w-56" />
+        <div className="shimmer-pronto h-5 w-72" />
       </CardHeader>
       <CardContent>
-        <div className="shimmer-fancy h-8 w-48" />
-        <div className="shimmer-fancy h-4 w-40" />
+        <div className="shimmer-pronto h-10 w-56" />
+        <div className="shimmer-pronto h-5 w-48" />
       </CardContent>
     </Card>
   );
@@ -364,10 +364,10 @@ function OndeComprarSkeleton() {
 function OfertasSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="shimmer-fancy h-6 w-40" />
+      <div className="shimmer-pronto h-7 w-48" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="shimmer-fancy aspect-[4/3] w-full rounded-xl" />
+          <div key={i} className="shimmer-pronto aspect-[4/3] w-full rounded-xl" />
         ))}
       </div>
     </div>
@@ -378,34 +378,38 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Hero: busca em destaque + chips rápidos */}
-      <section className="flex flex-col gap-4 py-2 lg:py-6 hero-gradient-inset">
-        <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl fade-in">
-          Descubra onde sua compra sai <span className="text-primary">mais barata</span>
-        </h1>
-        <div className="w-full lg:max-w-2xl fade-in-slow">
-          <SearchAutocomplete />
+      <section className="relative overflow-hidden px-4 py-2 lg:py-6 hero-banner">
+        <div className="relative z-10">
+          <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl fade-in text-white">
+            Descubra onde sua compra sai <span className="text-gradient">mais barata</span>
+          </h1>
+          <div className="w-full lg:max-w-2xl mt-4 fade-in-slow">
+            <SearchAutocomplete />
+          </div>
+          <div className="flex flex-wrap gap-2 mt-6" role="group" aria-label="Buscas rápidas">
+            {QUICK_SEARCH_CHIPS.map((chip) => (
+              <Button
+                key={chip.query}
+                variant="outline"
+                asChild
+                size="sm"
+                className="gap-1.5 scale-hover border-white/20 hover:border-white/40 text-white bg-white/10 backdrop-blur-sm"
+              >
+                <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
+                  <span aria-hidden>{chip.icon}</span> {chip.label}
+                </Link>
+              </Button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Buscas rápidas">
-          {QUICK_SEARCH_CHIPS.map((chip) => (
-            <Button
-              key={chip.query}
-              variant="outline"
-              asChild
-              size="sm"
-              className="gap-1.5 scale-hover"
-            >
-              <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
-                <span aria-hidden>{chip.icon}</span> {chip.label}
-              </Link>
-            </Button>
-          ))}
-        </div>
+        {/* Overlay decorativo */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
       </section>
 
       {/* Duas seções side-by-side no desktop */}
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Coluna esquerda: Onde sua lista sai mais barata */}
-        <Card className="hero-card">
+        <Card className="hero-card card-hover-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
@@ -420,7 +424,7 @@ export default function HomePage() {
         </Card>
 
         {/* Coluna direita: Ofertas de hoje em São José */}
-        <Card className="hero-card">
+        <Card className="hero-card card-hover-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <MapPin className="h-5 w-5 text-primary" aria-hidden /> Ofertas de hoje em São José
