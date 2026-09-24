@@ -163,6 +163,79 @@
     background-size: 800px 100%;
     animation: mr-shimmer 1.4s ease-in-out infinite;
   }
+  /* Shimmer bonito (sutil) */
+  .shimmer-fancy {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted) / 0.6) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: mr-shimmer 2s ease-in-out infinite;
+    border-radius: 999px;
+  }
+  /* Hero gradient (sutil, sem ser obscuro) */
+  .hero-gradient {
+    background: radial-gradient(
+      ellipse at top right,
+      hsl(var(--primary) / 0.08) 0%,
+      transparent 50%
+    );
+  }
+  .hero-gradient-inset {
+    background: radial-gradient(
+      ellipse at top,
+      hsl(var(--primary) / 0.05) 0%,
+      transparent 60%
+    );
+  }
+  .hero-card {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--card) / 0.98) 100%
+    );
+    box-shadow:
+      0 2px 8px hsl(var(--foreground) / 0.03),
+      0 1px 3px hsl(var(--foreground) / 0.06);
+  }
+  /* Micro-animações */
+  .fade-in {
+    animation: mr-fade-in 0.3s ease-out;
+  }
+  .fade-in-slow {
+    animation: mr-fade-in 0.6s ease-out;
+  }
+  @keyframes mr-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .scale-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .scale-hover:hover {
+    transform: scale(1.02);
+  }
+  /* Card com hover elevation */
+  .card-elevated {
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.04),
+      0 4px 6px hsl(var(--foreground) / 0.03);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-elevated:hover {
+    box-shadow:
+      0 10px 15px hsl(var(--foreground) / 0.04),
+      0 4px 6px hsl(var(--foreground) / 0.02);
+    transform: translateY(-2px);
+  }
   /* Carrossel horizontal mobile */
   .snap-row {
     scroll-snap-type: x mandatory;

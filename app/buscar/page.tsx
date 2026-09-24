@@ -162,9 +162,9 @@ function Resultados({ q, city, group, sort }: { q: string; city: CityFilter; gro
   if (loading) {
     return (
       <div className="flex flex-col gap-2" aria-hidden>
-        <Skeleton className="shimmer h-24 w-full" />
-        <Skeleton className="shimmer h-24 w-full" />
-        <Skeleton className="shimmer h-24 w-full" />
+        <div className="shimmer-fancy h-24 w-full" />
+        <div className="shimmer-fancy h-24 w-full" />
+        <div className="shimmer-fancy h-24 w-full" />
       </div>
     );
   }
@@ -280,12 +280,15 @@ export default async function BuscarPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">
+      <h1 className="text-2xl font-bold fade-in">
         {q ? `Resultados para “${q}”` : "Buscar produtos"}
       </h1>
 
+      {/* Hero gradient background */}
+      <div className="hero-gradient-inset" />
+
       {/* Header de filtros */}
-      <Card>
+      <Card className="hero-card">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Busca */}

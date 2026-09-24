@@ -75,14 +75,14 @@ function ProductGridSkeleton() {
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, i) => (
         <li key={i}>
-          <Card className="p-4">
-            <Skeleton className="h-14 w-14 rounded-lg mb-3" />
-            <Skeleton className="h-4 w-3/4 mb-2" />
-            <Skeleton className="h-3 w-1/2 mb-4" />
+          <Card className="p-4 card-elevated">
+            <div className="shimmer-fancy h-14 w-14 rounded-xl mb-3" />
+            <div className="shimmer-fancy h-4 w-3/4 mb-2" />
+            <div className="shimmer-fancy h-3 w-1/2 mb-4" />
             <div className="space-y-2">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-2/3" />
-              <Skeleton className="h-3 w-1/2" />
+              <div className="shimmer-fancy h-3 w-full" />
+              <div className="shimmer-fancy h-3 w-2/3" />
+              <div className="shimmer-fancy h-3 w-1/2" />
             </div>
           </Card>
         </li>
@@ -190,20 +190,20 @@ async function CategoryContent({
   return (
     <div className="flex flex-col gap-6">
       {/* Hero com nome da categoria + ícone */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden hero-card">
         <CardContent className="pt-6 pb-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-center gap-4">
               {category.image_url && (
-                <div className="h-16 w-16 lg:h-20 lg:w-20 shrink-0 rounded-xl overflow-hidden bg-muted">
-                  <img 
-                    src={category.image_url} 
+                <div className="h-16 w-16 lg:h-20 lg:w-20 shrink-0 rounded-xl overflow-hidden bg-muted border border-border/50">
+                  <img
+                    src={category.image_url}
                     alt={category.name}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover fade-in"
                   />
                 </div>
               )}
-              <div>
+              <div className="fade-in-slow">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                   <Tag className="h-4 w-4 text-primary" aria-hidden />
                   <span>Categoria</span>
@@ -217,6 +217,9 @@ async function CategoryContent({
           </div>
         </CardContent>
       </Card>
+
+      {/* Hero gradient background */}
+      <div className="hero-gradient-inset" />
 
       {/* Filtros */}
       <Card>

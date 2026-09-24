@@ -330,7 +330,7 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="flex flex-col gap-2" aria-hidden>
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton key={i} className="shimmer h-16 w-full" />
+        <div key={i} className="shimmer-fancy h-16 w-full" />
       ))}
     </div>
   );
@@ -339,23 +339,23 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
 function HeroSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-hidden>
-      <Skeleton className="shimmer h-10 w-3/4" />
-      <Skeleton className="shimmer h-12 w-full lg:max-w-2xl" />
-      <Skeleton className="shimmer h-10 w-full" />
+      <div className="shimmer-fancy h-10 w-3/4" />
+      <div className="shimmer-fancy h-12 w-full lg:max-w-2xl" />
+      <div className="shimmer-fancy h-10 w-full" />
     </div>
   );
 }
 
 function OndeComprarSkeleton() {
   return (
-    <Card className="border-2 border-primary">
+    <Card className="border-2 border-primary card-elevated">
       <CardHeader className="pb-2">
-        <Skeleton className="shimmer h-6 w-48" />
-        <Skeleton className="shimmer h-4 w-64" />
+        <div className="shimmer-fancy h-6 w-48" />
+        <div className="shimmer-fancy h-4 w-64" />
       </CardHeader>
       <CardContent>
-        <Skeleton className="shimmer h-8 w-48" />
-        <Skeleton className="shimmer h-4 w-40" />
+        <div className="shimmer-fancy h-8 w-48" />
+        <div className="shimmer-fancy h-4 w-40" />
       </CardContent>
     </Card>
   );
@@ -364,10 +364,10 @@ function OndeComprarSkeleton() {
 function OfertasSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <Skeleton className="shimmer h-6 w-40" />
+      <div className="shimmer-fancy h-6 w-40" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="shimmer aspect-[4/3] w-full rounded-xl" />
+          <div key={i} className="shimmer-fancy aspect-[4/3] w-full rounded-xl" />
         ))}
       </div>
     </div>
@@ -378,11 +378,11 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Hero: busca em destaque + chips rápidos */}
-      <section className="flex flex-col gap-4 py-2 lg:py-6">
-        <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
+      <section className="flex flex-col gap-4 py-2 lg:py-6 hero-gradient-inset">
+        <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl fade-in">
           Descubra onde sua compra sai <span className="text-primary">mais barata</span>
         </h1>
-        <div className="w-full lg:max-w-2xl">
+        <div className="w-full lg:max-w-2xl fade-in-slow">
           <SearchAutocomplete />
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Buscas rápidas">
@@ -392,7 +392,7 @@ export default function HomePage() {
               variant="outline"
               asChild
               size="sm"
-              className="gap-1.5"
+              className="gap-1.5 scale-hover"
             >
               <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
                 <span aria-hidden>{chip.icon}</span> {chip.label}
@@ -405,12 +405,12 @@ export default function HomePage() {
       {/* Duas seções side-by-side no desktop */}
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Coluna esquerda: Onde sua lista sai mais barata */}
-        <Card>
+        <Card className="hero-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 fade-in">
               <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
             </CardTitle>
-            <CardDescription>Melhor mercado para o rancho do mês (baseado em template).</CardDescription>
+            <CardDescription className="fade-in-slow">Melhor mercado para o rancho do mês (baseado em template).</CardDescription>
           </CardHeader>
           <CardContent>
             <Suspense fallback={<OndeComprarSkeleton />}>
@@ -420,12 +420,12 @@ export default function HomePage() {
         </Card>
 
         {/* Coluna direita: Ofertas de hoje em São José */}
-        <Card>
+        <Card className="hero-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 fade-in">
               <MapPin className="h-5 w-5 text-primary" aria-hidden /> Ofertas de hoje em São José
             </CardTitle>
-            <CardDescription>Encartes e coletas recentes com thumbnail.</CardDescription>
+            <CardDescription className="fade-in-slow">Encartes e coletas recentes com thumbnail.</CardDescription>
           </CardHeader>
           <CardContent>
             <Suspense fallback={<OfertasSkeleton />}>
@@ -437,13 +437,13 @@ export default function HomePage() {
 
       {/* Seção: Comparador (último preço por mercado) */}
       <section>
-        <h2 className="mb-3 text-xl font-bold">Comparador — último preço por mercado</h2>
-        <Card>
+        <h2 className="mb-3 text-xl font-bold fade-in">Comparador — último preço por mercado</h2>
+        <Card className="hero-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 fade-in">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
             </CardTitle>
-            <CardDescription>Último preço por mercado, lado a lado.</CardDescription>
+            <CardDescription className="fade-in-slow">Último preço por mercado, lado a lado.</CardDescription>
           </CardHeader>
           <CardContent>
             <Suspense fallback={<SectionSkeleton />}>
@@ -455,13 +455,13 @@ export default function HomePage() {
 
       {/* Seção: Ofertas em destaque (quedas + mínimos) */}
       <section>
-        <h2 className="mb-3 text-xl font-bold">Ofertas em destaque</h2>
-        <Card>
+        <h2 className="mb-3 text-xl font-bold fade-in">Ofertas em destaque</h2>
+        <Card className="hero-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 fade-in">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque
             </CardTitle>
-            <CardDescription>Maiores quedas e mínimos históricos.</CardDescription>
+            <CardDescription className="fade-in-slow">Maiores quedas e mínimos históricos.</CardDescription>
           </CardHeader>
           <CardContent>
             <Suspense fallback={<OfertasSkeleton />}>
@@ -473,7 +473,7 @@ export default function HomePage() {
 
       {/* Seção: Mercados monitorados */}
       <section>
-        <h2 className="mb-3 text-xl font-bold">Mercados monitorados</h2>
+        <h2 className="mb-3 text-xl font-bold fade-in">Mercados monitorados</h2>
         <Suspense fallback={<SectionSkeleton lines={4} />}>
           <Mercados />
         </Suspense>

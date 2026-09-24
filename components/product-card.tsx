@@ -54,8 +54,7 @@ export function ProductCard({
   return (
     <Card
       className={cn(
-        "group transition-all duration-200",
-        "hover:shadow-lg hover:-translate-y-[2px]",
+        "group transition-all duration-200 card-elevated",
         isCompact && "p-3",
         !isCompact && "p-4",
       )}
@@ -112,7 +111,7 @@ export function ProductCard({
               const isCheapest = cheapest?.market_id === p.market_id;
               const pct = max > 0 ? Math.max(6, (effective(p) / max) * 100) : 0;
               return (
-                <li key={p.market_id} className="flex flex-col gap-1 text-sm">
+                <li key={p.market_id} className="flex flex-col gap-1 text-sm scale-hover">
                   <span className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2">
                       <span
