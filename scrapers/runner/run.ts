@@ -7,11 +7,24 @@
 import { toRunStats } from "../core/types.js";
 import { fortConfig } from "../markets/fort.js";
 import { kochConfig } from "../markets/koch.js";
-import { scrapeOsuperMarket, type OsuperMarketConfig } from "../markets/osuper.js";
+import { scrapeOsuperMarket, type OsuperMarketConfig, DEFAULT_THROTTLE_MS } from "../markets/osuper.js";
+import { scrapeWordPressEncartes, type WordPressMarketConfig } from "../markets/brasil.js";
+import { scrapeKompraoOfertas, type KompraoMarketConfig } from "../markets/komprao.js";
 
-const MARKETS: Record<string, OsuperMarketConfig> = {
+const MARKETS: Record<string, OsuperMarketConfig | WordPressMarketConfig | KompraoMarketConfig> = {
   fort: fortConfig,
   koch: kochConfig,
+  brasil: {
+    marketSlug: "brasil",
+    siteUrl: "https://www.brasilatacadista.com.br",
+    wpJsonUrl: "https://www.brasilatacadista.com.br/wp-json",
+  },
+  komprao: {
+    marketSlug: "komprao",
+    siteUrl: "https://komprao.com.br",
+    wpJsonUrl: "https://komprao.com.br/wp-json",
+    city: "sao-jose",
+  },
 };
 
 // Baseline: mediana de 7 dias de products_found. Seed = limit default até haver histórico.
@@ -68,7 +81,7 @@ async function main() {
   );
   const config = MARKETS[market];
   if (!config) {
-    console.error(`Mercado desconhecido: "${market}". Use --market fort|koch.`);
+    console.error(`Mercado desconhecido: "${market}". Use --market fort|koch|brasil|komprao.`);
     process.exit(2);
   }
   if (!Number.isFinite(limit) || limit < 1 || limit > 2000) {
@@ -85,18 +98,33 @@ async function main() {
   }
 
   console.log(
-    `[run] market=${market} limit=${limit} dryRun=${dryRun} concurrency=${concurrency} incremental=${incremental} full=${full} skip=${skip} storeId=${config.storeId}`,
+    `[run] market=${market} limit=${limit} dryRun=${dryRun} concurrency=${concurrency} incremental=${incremental} full=${full} skip=${skip}`,
   );
-  const result = await scrapeOsuperMarket(config, {
-    limit,
-    concurrency,
-    incremental,
-    full,
-    skip,
-    onProgress: (done, total, url) => {
-      if (done % 25 === 0 || done === total) console.log(`[run] ${done}/${total} ${url}`);
-    },
-  });
+
+  let result: Awaited<ReturnType<typeof scrapeOsuperMarket>>;
+  if ("apiUrl" in config) {
+    // Osuper markets (Fort, Koch)
+    result = await scrapeOsuperMarket(config as OsuperMarketConfig, {
+      limit,
+      concurrency,
+      incremental,
+      full,
+      skip,
+      onProgress: (done, total, url) => {
+        if (done % 25 === 0 || done === total) console.log(`[run] ${done}/${total} ${url}`);
+      },
+    });
+  } else if ("wpJsonUrl" in config && "city" in config) {
+    // Komprão
+    result = await scrapeKompraoOfertas(config as KompraoMarketConfig, { limit, throttleMs: DEFAULT_THROTTLE_MS });
+  } else if ("wpJsonUrl" in config) {
+    // Brasil Atacadista
+    result = await scrapeWordPressEncartes(config as WordPressMarketConfig, { limit, throttleMs: DEFAULT_THROTTLE_MS });
+  } else {
+    console.error(`Configuração de mercado desconhecida para: ${market}`);
+    process.exit(2);
+  }
+
   const stats = toRunStats(result);
   console.log(
     JSON.stringify({ ...stats, errors: result.outcomes.filter((o) => !o.ok).slice(0, 10) }),
@@ -122,17 +150,19 @@ async function main() {
     console.log(JSON.stringify({ dryRun: true, sample: result.items.slice(0, 5) }, null, 2));
   }
 
-  // Gates de qualidade
-  const belowBaseline = stats.productsFound < 0.3 * Math.min(BASELINE_PRODUCTS_FOUND, limit);
-  if (belowBaseline) {
-    console.error(
-      `[run] FAIL: products_found=${stats.productsFound} < 30% da baseline (${Math.min(BASELINE_PRODUCTS_FOUND, limit)}).`,
-    );
-    process.exit(1);
-  }
-  if (stats.errorRate > 0.5) {
-    console.error(`[run] FAIL: taxa de erro=${(stats.errorRate * 100).toFixed(1)}% > 50%.`);
-    process.exit(1);
+  // Gates de qualidade (só para Osuper que tem baseline)
+  if ("apiUrl" in config) {
+    const belowBaseline = stats.productsFound < 0.3 * Math.min(BASELINE_PRODUCTS_FOUND, limit);
+    if (belowBaseline) {
+      console.error(
+        `[run] FAIL: products_found=${stats.productsFound} < 30% da baseline (${Math.min(BASELINE_PRODUCTS_FOUND, limit)}).`,
+      );
+      process.exit(1);
+    }
+    if (stats.errorRate > 0.5) {
+      console.error(`[run] FAIL: taxa de erro=${(stats.errorRate * 100).toFixed(1)}% > 50%.`);
+      process.exit(1);
+    }
   }
   console.log("[run] OK");
 }

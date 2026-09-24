@@ -40,10 +40,10 @@ export interface OsuperScrapeOptions {
 }
 
 export const USER_AGENT = "MercadoRadar/1.0 +contato";
-const DEFAULT_LIMIT = 200;
-const DEFAULT_THROTTLE_MS = 2000;
-const DEFAULT_CONCURRENCY = 4;
-const MAX_CONCURRENCY = 8;
+export const DEFAULT_LIMIT = 200;
+export const DEFAULT_THROTTLE_MS = 2000;
+export const DEFAULT_CONCURRENCY = 4;
+export const MAX_CONCURRENCY = 8;
 /** Janela do incremental (72h). */
 export const INCREMENTAL_MAX_AGE_MS = 72 * 3600 * 1000;
 
