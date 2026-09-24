@@ -25,6 +25,10 @@ export interface CollectOptions {
   throttleMs: number;
   /** Retries para requisições HTTP */
   retries: number;
+  /** IDs de scrape_actions específicos a processar (dynamic matrix) */
+  actionIds?: string[];
+  /** URLs correspondentes aos actionIds (mesma ordem) */
+  actionUrls?: string[];
   /** Callback de progresso (thread-safe: done++ é atômico no event loop) */
   onProgress?: (done: number, total: number, url: string) => void;
   /** Timestamp injetável para testes determinísticos */

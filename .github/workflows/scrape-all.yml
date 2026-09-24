@@ -2,10 +2,9 @@ name: scrape-all
 
 on:
   schedule:
-    # Diário 06:00 BRT (09:00 UTC): incremental — sem lastmod no sitemap,
-    # fatia por skip rotacionado pelo dia da semana (dia * 500).
+    # Diário 06:00 BRT (09:00 UTC): incremental
     - cron: "0 9 * * 1-6"
-    # Domingo 05:00 BRT (08:00 UTC): full semanal.
+    # Domingo 05:00 BRT (08:00 UTC): full semanal
     - cron: "0 8 * * 0"
   workflow_dispatch:
     inputs:
@@ -18,14 +17,77 @@ on:
       mode:
         description: "incremental ou full"
         default: "incremental"
+      markets:
+        description: "Mercados separados por vírgula (ex: fort,koch,brasil,komprao)"
+        default: ""
+      max_actions:
+        description: "Máximo de ações para processar neste run"
+        default: "20"
 
 jobs:
+  dispatch:
+    name: Dispatch Dynamic Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.dispatch.outputs.matrix }}
+      hasWork: ${{ steps.dispatch.outputs.hasWork }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Dispatch scrape actions
+        id: dispatch
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npx tsx scripts/dispatch-scrape-actions.ts \
+            --max-actions ${{ inputs.max_actions }} \
+            --markets ${{ inputs.markets }} | tee dispatch-output.json
+          echo "matrix=$(cat dispatch-output.json | jq -c .matrix)" >> $GITHUB_OUTPUT
+          echo "hasWork=$(cat dispatch-output.json | jq -r .hasWork)" >> $GITHUB_OUTPUT
+
   scrape:
+    name: Scrape Market
+    needs: dispatch
+    if: needs.dispatch.outputs.hasWork == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.dispatch.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Scrape ${{ matrix.market_slug }}
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          npx tsx scrapers/runner/run.ts --market ${{ matrix.market_slug }} \
+            --limit ${{ matrix.limit }} \
+            --action-ids "${{ matrix.action_ids }}" \
+            --action-urls "${{ matrix.action_urls }}" \
+            --concurrency 4 \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+  scrape-fallback:
+    name: Scrape Fallback (Traditional)
+    if: needs.dispatch.outputs.hasWork == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
       matrix:
-        market: [fort, koch]
+        market: [fort, koch, brasil, komprao]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

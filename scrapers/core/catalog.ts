@@ -2,6 +2,7 @@
  * Product Catalog - MercadoRadar
  * Responsável por match/criação de produtos no catálogo normalizado.
  * Prioridade: EAN → alias (market+raw_name) → canonical_name fuzzy (v2) → novo produto.
+ * Usa tabela canonical_products (nova arquitetura migration 0008).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -33,23 +34,22 @@ export class ProductCatalog {
   constructor(private supabase: SupabaseClient) {}
 
   /**
-   * Match ou cria produto no catálogo.
-   * Retorna productId + metadados de como foi matchado.
+   * Match ou cria produto no catálogo normalizado (canonical_products).
+   * Retorna productId (canonical_products.id) + metadados de como foi matchado.
    */
   async matchOrCreate(product: NormalizedProductForCatalog): Promise<ProductRef> {
-    // 1. Tenta EAN/GTIN (exato)
+    // 1. Tenta EAN/GTIN (exato) em canonical_products
     if (product.barcode) {
       const { data, error } = await this.supabase
-        .from("products")
+        .from("canonical_products")
         .select("id")
-        .eq("ean", product.barcode)
+        .eq("barcode", product.barcode)
         .maybeSingle();
       
       if (!error && data) {
-        // Atualiza last_seen_at
         await this.supabase
-          .from("products")
-          .update({ last_seen_at: product.collectedAt })
+          .from("canonical_products")
+          .update({ updated_at: product.collectedAt })
           .eq("id", data.id);
         return { productId: data.id, isNew: false, matchedBy: "ean" };
       }
@@ -67,17 +67,17 @@ export class ProductCatalog {
       
       if (alias) {
         await this.supabase
-          .from("products")
-          .update({ last_seen_at: product.collectedAt })
+          .from("canonical_products")
+          .update({ updated_at: product.collectedAt })
           .eq("id", alias.product_id);
         return { productId: alias.product_id, isNew: false, matchedBy: "alias" };
       }
     }
 
-    // 3. Tenta nome canônico exato (fallback antes de criar novo)
+    // 3. Tenta nome canônico exato (via slug) em canonical_products
     const canonicalSlug = slugify(product.canonicalName);
     const { data: byCanonical } = await this.supabase
-      .from("products")
+      .from("canonical_products")
       .select("id")
       .eq("slug", canonicalSlug)
       .maybeSingle();
@@ -89,20 +89,31 @@ export class ProductCatalog {
           product_id: byCanonical.id,
           market_id: marketId,
           raw_name: product.rawName,
+          market_sku: product.marketSku,
         }, { onConflict: "product_id,market_id,raw_name" });
       }
       await this.supabase
-        .from("products")
-        .update({ last_seen_at: product.collectedAt })
+        .from("canonical_products")
+        .update({ updated_at: product.collectedAt })
         .eq("id", byCanonical.id);
       return { productId: byCanonical.id, isNew: false, matchedBy: "canonical" };
     }
 
-    // 4. Cria novo produto com campos normalizados
+    // 4. Cria novo canonical_product
+    let categoryId: string | null = null;
+    if (product.categoryHint) {
+      const { data } = await this.supabase
+        .from("categories")
+        .select("id")
+        .ilike("name", product.categoryHint)
+        .maybeSingle();
+      categoryId = data?.id ?? null;
+    }
+
     const { data: inserted, error: insertError } = await this.supabase
-      .from("products")
+      .from("canonical_products")
       .upsert({
-        name: product.canonicalName.slice(0, 300),
+        canonical_name: product.canonicalName.slice(0, 300),
         slug: canonicalSlug,
         brand: product.brand?.slice(0, 120) ?? null,
         barcode: product.barcode?.slice(0, 40) ?? null,
@@ -110,17 +121,14 @@ export class ProductCatalog {
         quantity: product.quantity,
         normalized_unit: product.normalizedUnit,
         normalized_quantity: product.normalizedQuantity,
-        canonical_name: product.canonicalName.slice(0, 300),
         image_url: product.imageUrl,
-        category_id: await this.inferCategoryId(product.categoryHint),
-        last_seen_at: product.collectedAt,
-        active: true,
+        category_id: categoryId,
       }, { onConflict: "slug" })
       .select("id")
       .single();
 
     if (insertError || !inserted) {
-      throw new Error(`Falha ao criar produto: ${insertError?.message ?? "unknown"}`);
+      throw new Error(`Falha ao criar canonical_product: ${insertError?.message ?? "unknown"}`);
     }
 
     // 5. Registra alias
@@ -129,6 +137,7 @@ export class ProductCatalog {
         product_id: inserted.id,
         market_id: marketId,
         raw_name: product.rawName,
+        market_sku: product.marketSku,
       }, { onConflict: "product_id,market_id,raw_name" });
     }
 

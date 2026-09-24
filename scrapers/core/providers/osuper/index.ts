@@ -78,27 +78,36 @@ export class OsuperProvider extends BaseHttpProvider {
     const skip = Math.max(0, Math.floor(options.skip ?? 0));
     const incremental = (options.incremental ?? false) && !options.full;
 
-    // 1. Baixa sitemap
-    const xml = await this.fetchText(
-      `${this.osuperConfig.siteUrl.replace(/\/$/, "")}/sitemap.xml`,
-      retries
-    );
+    let urls: string[];
+    let actionIds: string[] = [];
 
-    // 2. Parseia e filtra entradas
-    const { selected, hasLastmod, total } = selectEntries(parseSitemapEntries(xml), {
-      limit,
-      skip,
-      incremental,
-      full: options.full,
-      nowMs: options.nowMs,
-    });
-
-    const urls = selected.map((e) => e.url);
-
-    if (incremental && !hasLastmod) {
-      console.log(
-        `[${this.slug}] sitemap sem <lastmod> (total=${total}) — fallback por skip=${skip} limit=${limit}`
+    // Dynamic matrix mode: usar URLs específicas das scrape_actions
+    if (options.actionUrls && options.actionUrls.length > 0) {
+      urls = options.actionUrls;
+      actionIds = options.actionIds || [];
+      console.log(`[${this.slug}] Dynamic matrix mode: ${urls.length} URLs from scrape_actions`);
+    } else {
+      // Modo tradicional: sitemap
+      const xml = await this.fetchText(
+        `${this.osuperConfig.siteUrl.replace(/\/$/, "")}/sitemap.xml`,
+        retries
       );
+
+      const { selected, hasLastmod, total } = selectEntries(parseSitemapEntries(xml), {
+        limit,
+        skip,
+        incremental,
+        full: options.full,
+        nowMs: options.nowMs,
+      });
+
+      urls = selected.map((e) => e.url);
+
+      if (incremental && !hasLastmod) {
+        console.log(
+          `[${this.slug}] sitemap sem <lastmod> (total=${total}) — fallback por skip=${skip} limit=${limit}`
+        );
+      }
     }
 
     // 3. Headers com cookie de loja
@@ -107,7 +116,7 @@ export class OsuperProvider extends BaseHttpProvider {
     // 4. Coleta paralela com throttle
     const results = await this.parallelWithThrottle<NormalizedProduct | null>(
       urls,
-      async (url) => {
+      async (url, index) => {
         const collectedAt = new Date().toISOString();
         try {
           const html = await this.fetchText(url, retries, headers);
@@ -153,6 +162,15 @@ export class OsuperProvider extends BaseHttpProvider {
 
     const finishedAt = new Date().toISOString();
     const stats = this.toRunStats({ items, outcomes, startedAt, finishedAt } as CollectResult);
+
+    // Se dynamic matrix, adicionar action_ids aos outcomes para complete_scrape_action
+    if (actionIds.length > 0) {
+      for (let i = 0; i < outcomes.length; i++) {
+        if (actionIds[i]) {
+          (outcomes[i] as any).action_id = actionIds[i];
+        }
+      }
+    }
 
     return {
       items,

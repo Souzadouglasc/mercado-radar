@@ -80,10 +80,10 @@ export const MARKETS_CONFIG: MarketsConfig = {
       enabled: true,
       config: {
         marketSlug: "komprao",
-        siteUrl: "https://komprao.com.br",
-        wpJsonUrl: "https://komprao.com.br/wp-json",
+        siteUrl: "https://www.komprao.com.br",
+        wpJsonUrl: "https://www.komprao.com.br/wp-json",
         searchTerms: ["oferta", "encarte", "promoção"],
-        postType: "page",
+        postType: "oferta",
         city: "sao-jose",
         cityAttended: "São José",
       },

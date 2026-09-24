@@ -73,10 +73,7 @@ export class Orchestrator {
     );
 
     if (!this.options.dryRun) {
-      this.ingestClient = new IngestClient(
-        process.env.APP_URL!,
-        process.env.CRON_SECRET!
-      );
+      this.ingestClient = new IngestClient();
     }
   }
 
@@ -107,6 +104,8 @@ export class Orchestrator {
       concurrency: this.options.collectOptions.concurrency ?? 4,
       throttleMs: this.options.collectOptions.throttleMs ?? 2000,
       retries: this.options.collectOptions.retries ?? 2,
+      actionIds: this.options.collectOptions.actionIds ?? [],
+      actionUrls: this.options.collectOptions.actionUrls ?? [],
       onProgress: (done, total, url) => {
         if (done % 25 === 0 || done === total) {
           this.log(`[${marketSlug}] ${done}/${total} ${url}`);
@@ -129,6 +128,24 @@ export class Orchestrator {
     }
 
     this.log(`[${marketSlug}] Coleta finalizada: ${collectResult.items.length} produtos, ${collectResult.stats.errors} erros (${(collectResult.stats.errorRate * 100).toFixed(1)}%)`);
+
+    // Complete scrape_actions se dynamic matrix
+    if (!this.options.dryRun && collectOptions.actionIds && collectOptions.actionIds.length > 0) {
+      for (const actionId of collectOptions.actionIds) {
+        if (actionId) {
+          try {
+            await this.supabase.rpc("complete_scrape_action", {
+              p_action_id: actionId,
+              p_status: "done",
+              p_error_summary: null,
+            });
+            this.log(`[${marketSlug}] Action ${actionId} marcada como done`);
+          } catch (err) {
+            this.log(`[${marketSlug}] Erro ao completar action ${actionId}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+    }
 
     // Quality gates (apenas para providers com baseline)
     const belowBaseline = collectResult.items.length < 0.3 * Math.min(baseline.minProducts, collectOptions.limit);
@@ -168,8 +185,8 @@ export class Orchestrator {
           isNew: ref.isNew,
         });
 
-        // Prepara item para ingest (usa nome original para alias matching)
-        ingestItems.push(IngestClient.toIngestItem(normalized));
+        // Prepara item para ingest (usa nome original para alias matching + canonical_product_id)
+        ingestItems.push(IngestClient.toIngestItem(normalized, ref.productId));
       } catch (err) {
         this.log(`[${marketSlug}] Erro no catalog para "${normalized.rawName}": ${err instanceof Error ? err.message : String(err)}`);
       }

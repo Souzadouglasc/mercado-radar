@@ -2,10 +2,12 @@
 /**
  * CLI: tsx scrapers/runner/run.ts --market fort --limit 200 [--dry-run] [--concurrency 4] [--incremental|--full] [--skip N]
  * Nova versão usa Orchestrator + Provider Registry.
+ * Suporta flags --action-ids e --action-urls para dynamic matrix do GitHub Actions.
  * Mantém compatibilidade com flags antigas.
  */
 
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { createServiceRoleClient } from "../lib/supabase.js";
 import { createOrchestrator, type OrchestratorOptions } from "./orchestrator.js";
 import { getEnabledSlugs, getMarketConfig } from "../config/markets.config.js";
@@ -20,10 +22,7 @@ function parseArgs(argv: string[]) {
     const key = a.slice(2);
     const next = argv[i + 1];
     if (next == null || next.startsWith("--")) args[key] = true;
-    else {
-      args[key] = next;
-      i++;
-    }
+    else { args[key] = next; i++; }
   }
   return {
     market: String(args.market ?? ""),
@@ -34,11 +33,13 @@ function parseArgs(argv: string[]) {
     incremental: args.incremental === true,
     full: args.full === true,
     skip: args.skip != null ? Number(args.skip) : 0,
+    actionIds: args["action-ids"] ? String(args["action-ids"]).split(",") : [],
+    actionUrls: args["action-urls"] ? String(args["action-urls"]).split("|") : [],
   };
 }
 
 async function main() {
-  const { market, markets, limit, dryRun, concurrency, incremental, full, skip } = parseArgs(
+  const { market, markets, limit, dryRun, concurrency, incremental, full, skip, actionIds, actionUrls } = parseArgs(
     process.argv.slice(2),
   );
 
@@ -88,6 +89,8 @@ async function main() {
       skip,
       concurrency,
       throttleMs: 2000,
+      actionIds,
+      actionUrls,
     },
     dryRun,
     onLog: (msg) => console.log(msg),
