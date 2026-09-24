@@ -18,7 +18,7 @@ Compare preços de supermercados da região (Fort, Koch, Brasil, Komprão). Mobi
 | Projeto Supabase + migration + seed | ✅ (`supabase/migrations/`) |
 | Auth + `/admin` com guarda `is_admin` | ✅ (Supabase Auth pt-BR, `/admin` 404 p/ não-admin) |
 | CRUD admin + dashboard de comparação | ✅ (server actions + `POST /api/ingest/prices`) |
-| Deploy Vercel | ⬜ Fase 1 item 7 |
+| Deploy Vercel | ✅ `https://mercado-radar.vercel.app` (prod) |
 
 Critério de aceite Fase 1: usuário cadastra produto, lança preço manual em 2 mercados e vê comparação — sem nenhum scraper.
 
@@ -90,6 +90,34 @@ npm run build                # deve passar sem erro
 | `NEXT_PUBLIC_SITE_URL` | client | URL pública (sitemap/robots/OG) |
 
 GH Secrets (Fase 4): `APP_URL`, `CRON_SECRET` (`SUPABASE_URL` não é usada direto pelo scraper).
+
+## Deploy (produção)
+
+App em produção: **https://mercado-radar.vercel.app**
+
+Projeto Vercel: `souzadouglascs-projects/mercado-radar` (link via `vercel link`,
+deploy com `vercel --prod`).
+
+Env vars em produção (Vercel → Production): `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`,
+`NEXT_PUBLIC_SITE_URL=https://mercado-radar.vercel.app`.
+
+GH Secrets: `APP_URL` (= URL de produção), `CRON_SECRET` (= mesmo valor da
+Vercel). Nunca logar valores.
+
+Validação pós-deploy:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://mercado-radar.vercel.app/
+curl -s "https://mercado-radar.vercel.app/api/search?q=arroz"
+# Ingestão (Bearer = CRON_SECRET de produção):
+curl -X POST https://mercado-radar.vercel.app/api/ingest/prices \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -d '{"items":[{"product_name":"Arroz Teste","price":9.99,"market_slug":"fort","source":"manual","collected_at":"<ISO-8601>"}]}'
+# Scraper dry-run:
+gh workflow run scrape-fort.yml -f limit=5 -f dry_run=true
+```
 
 ## Limites do free tier (R$ 0)
 
