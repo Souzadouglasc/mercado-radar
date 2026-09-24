@@ -31,3 +31,4 @@ jobs:
           npx tsx scrapers/runner/run.ts --market fort
           --limit "${{ inputs.limit || '200' }}"
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+
