@@ -130,6 +130,7 @@ export async function POST(request: Request) {
             barcode: item.barcode ?? null,
             unit: item.unit ?? null,
             quantity: item.quantity ?? null,
+            image_url: item.image_url ?? null,
           },
           { onConflict: "slug" },
         )
@@ -151,6 +152,12 @@ export async function POST(request: Request) {
         { product_id: productId, market_id: marketId, raw_name: item.product_name },
         { onConflict: "product_id,market_id,raw_name" },
       );
+    } else if (item.image_url) {
+      // Produto já existe — atualiza image_url se veio nova
+      await supabase
+        .from("products")
+        .update({ image_url: item.image_url })
+        .eq("id", productId);
     }
     const { error: priceError } = await supabase.from("prices").insert({
       product_id: productId,
