@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/basket/calc.test.ts scrapers/core/normalize.test.ts scrapers/markets/jsonld.test.ts"
+    "test": "tsx --test lib/basket/calc.test.ts scrapers/core/normalize.test.ts scrapers/markets/jsonld.test.ts scrapers/markets/osuper.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

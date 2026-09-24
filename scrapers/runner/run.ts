@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CLI: tsx scrapers/runner/run.ts --market fort --limit 200 [--dry-run]
+ * CLI: tsx scrapers/runner/run.ts --market fort --limit 200 [--dry-run] [--concurrency 4] [--incremental|--full] [--skip N]
  * Coleta via provider Osuper e envia em batches de 100 p/ POST /api/ingest/prices.
  * Exit 1 se products_found < 30% da baseline OU taxa de erro > 50%.
  */
@@ -35,6 +35,10 @@ function parseArgs(argv: string[]) {
     market: String(args.market ?? ""),
     limit: args.limit != null ? Number(args.limit) : 200,
     dryRun: args["dry-run"] === true,
+    concurrency: args.concurrency != null ? Number(args.concurrency) : 4,
+    incremental: args.incremental === true,
+    full: args.full === true,
+    skip: args.skip != null ? Number(args.skip) : 0,
   };
 }
 
@@ -59,7 +63,9 @@ async function postBatch(appUrl: string, secret: string, items: unknown[]) {
 }
 
 async function main() {
-  const { market, limit, dryRun } = parseArgs(process.argv.slice(2));
+  const { market, limit, dryRun, concurrency, incremental, full, skip } = parseArgs(
+    process.argv.slice(2),
+  );
   const config = MARKETS[market];
   if (!config) {
     console.error(`Mercado desconhecido: "${market}". Use --market fort|koch.`);
@@ -69,10 +75,24 @@ async function main() {
     console.error(`--limit inválido: ${limit}. Use 1..2000.`);
     process.exit(2);
   }
+  if (!Number.isFinite(concurrency) || concurrency < 1 || concurrency > 8) {
+    console.error(`--concurrency inválido: ${concurrency}. Use 1..8.`);
+    process.exit(2);
+  }
+  if (!Number.isFinite(skip) || skip < 0) {
+    console.error(`--skip inválido: ${skip}. Use >= 0.`);
+    process.exit(2);
+  }
 
-  console.log(`[run] market=${market} limit=${limit} dryRun=${dryRun}`);
+  console.log(
+    `[run] market=${market} limit=${limit} dryRun=${dryRun} concurrency=${concurrency} incremental=${incremental} full=${full} skip=${skip} storeId=${config.storeId}`,
+  );
   const result = await scrapeOsuperMarket(config, {
     limit,
+    concurrency,
+    incremental,
+    full,
+    skip,
     onProgress: (done, total, url) => {
       if (done % 25 === 0 || done === total) console.log(`[run] ${done}/${total} ${url}`);
     },
