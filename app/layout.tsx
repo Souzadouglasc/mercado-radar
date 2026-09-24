@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full">
         <ThemeProvider>
           <SiteHeader />
-          <main className="mx-auto w-full max-w-full px-4 pb-24 pt-6 sm:px-6 md:max-w-3xl md:pb-12 lg:max-w-6xl lg:px-8">
+          <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-6 sm:px-6 md:pb-12 lg:px-10 lg:pt-8">
             {children}
           </main>
           <BottomNav />

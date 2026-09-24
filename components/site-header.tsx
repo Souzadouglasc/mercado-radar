@@ -2,40 +2,50 @@
 
 import Link from "next/link";
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthStatus } from "@/components/auth-status";
 import { LogoMark } from "@/components/logo";
 import { SearchAutocomplete } from "@/components/search-autocomplete";
+import { cn } from "@/lib/utils";
+
+const links = [
+  { href: "/buscar", label: "Buscar" },
+  { href: "/ofertas", label: "Ofertas" },
+  { href: "/listas", label: "Listas" },
+];
 
 export function SiteHeader() {
   const { theme, setTheme } = useTheme();
+  const pathname = usePathname();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-14 w-full max-w-full items-center gap-2 px-4 sm:px-6 md:max-w-3xl lg:max-w-6xl lg:gap-4 lg:px-8">
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:gap-6 lg:px-10">
         <Link href="/" className="flex shrink-0 items-center gap-2 font-bold" aria-label="MercadoRadar — início">
           <LogoMark />
-          <span className="hidden sm:inline">MercadoRadar</span>
+          <span className="hidden text-[15px] tracking-tight sm:inline">Mercado<span className="text-primary">Radar</span></span>
         </Link>
-        <nav aria-label="Navegação principal" className="hidden items-center gap-1 md:flex">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/">Início</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/buscar">Buscar</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/listas">Listas</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/alertas">Alertas</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/favoritos">Favoritos</Link>
-          </Button>
+        <nav aria-label="Navegação principal" className="hidden items-center gap-1 lg:flex">
+          {links.map(({ href, label }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "rounded-full px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground",
+                  active ? "bg-primary/10 text-primary" : "text-muted-foreground",
+                )}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </nav>
-        <SearchAutocomplete compact />
+        <div className="ml-auto hidden w-full max-w-xs md:block"><SearchAutocomplete compact /></div>
         <AuthStatus />
         <Button
           variant="ghost"
