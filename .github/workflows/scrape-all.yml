@@ -1,0 +1,34 @@
+name: scrape-all
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max de produtos por mercado"
+        default: "200"
+      dry_run:
+        description: "Coleta sem enviar (true/false)"
+        default: "false"
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        market: [fort, koch]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Scrape ${{ matrix.market }}
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: >
+          npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
+          --limit "${{ inputs.limit || '200' }}"
+          ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
