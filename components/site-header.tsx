@@ -14,6 +14,8 @@ const links = [
   { href: "/buscar", label: "Buscar" },
   { href: "/ofertas", label: "Ofertas" },
   { href: "/listas", label: "Listas" },
+  { href: "/alertas", label: "Alertas" },
+  { href: "/favoritos", label: "Favoritos" },
 ];
 
 export function SiteHeader() {
@@ -45,7 +47,7 @@ export function SiteHeader() {
             );
           })}
         </nav>
-        <div className="ml-auto hidden w-full max-w-xs md:block"><SearchAutocomplete compact /></div>
+        <div className="ml-auto hidden w-full max-w-xs xl:block"><SearchAutocomplete compact /></div>
         <AuthStatus />
         <Button
           variant="ghost"
