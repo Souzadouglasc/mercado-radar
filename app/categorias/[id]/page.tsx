@@ -75,14 +75,14 @@ function ProductGridSkeleton() {
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, i) => (
         <li key={i}>
-          <Card className="p-4 card-hover-elevated product-highlight">
-            <div className="shimmer-pronto h-14 w-14 rounded-xl mb-3" />
-            <div className="shimmer-pronto h-5 w-3/4 mb-2" />
-            <div className="shimmer-pronto h-4 w-1/2 mb-4" />
+          <Card className="p-4 card-hover-elevated product-highlight card-glass">
+            <div className="shimmer-smooth h-14 w-14 rounded-xl mb-3" />
+            <div className="shimmer-smooth h-5 w-3/4 mb-2" />
+            <div className="shimmer-smooth h-4 w-1/2 mb-4" />
             <div className="space-y-3">
-              <div className="shimmer-pronto h-4 w-full" />
-              <div className="shimmer-pronto h-4 w-2/3" />
-              <div className="shimmer-pronto h-4 w-1/2" />
+              <div className="shimmer-smooth h-4 w-full" />
+              <div className="shimmer-smooth h-4 w-2/3" />
+              <div className="shimmer-smooth h-4 w-1/2" />
             </div>
           </Card>
         </li>
@@ -190,7 +190,7 @@ async function CategoryContent({
   return (
     <div className="flex flex-col gap-6">
       {/* Hero com nome da categoria + ícone */}
-      <Card className="overflow-hidden hero-card card-hover-elevated">
+      <Card className="overflow-hidden hero-card card-hover-elevated card-glass">
         <CardContent className="pt-6 pb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="flex items-center gap-6">
@@ -233,10 +233,10 @@ async function CategoryContent({
       </Card>
 
       {/* Hero gradient background */}
-      <div className="hero-banner-minimal" />
+      <div className="hero-gradient-moderate" />
 
       {/* Filtros */}
-      <Card className="hero-card">
+      <Card className="card-glass">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
@@ -247,7 +247,7 @@ async function CategoryContent({
                 params.set("sort", sortValue);
                 window.location.href = `/categorias/${id}?${params.toString()}`;
               }}>
-                <SelectTrigger className="w-[180px] sm:w-[200px]">
+                <SelectTrigger className="w-[180px] sm:w-[200px] btn-outline btn-ghost-hover">
                   <SelectValue placeholder="Cidade" />
                 </SelectTrigger>
                 <SelectContent>
@@ -266,7 +266,7 @@ async function CategoryContent({
                 params.set("sort", v);
                 window.location.href = `/categorias/${id}?${params.toString()}`;
               }}>
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-[220px] btn-outline btn-ghost-hover">
                   <SelectValue placeholder="Ordenar" />
                 </SelectTrigger>
                 <SelectContent>

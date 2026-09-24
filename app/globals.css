@@ -380,4 +380,101 @@
   .bg-gold {
     background-color: hsl(var(--gold-gradient-start));
   }
+  /* Glassmorphism sutil */
+  .card-glass {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card) / 0.95),
+      hsl(var(--card) / 0.98)
+    );
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.03),
+      0 2px 8px hsl(var(--foreground) / 0.04);
+  }
+  /* Hero gradient moderado (não profundo) */
+  .hero-gradient-moderate {
+    background: radial-gradient(
+      ellipse at top right,
+      hsl(var(--primary) / 0.06),
+      transparent 50%
+    );
+  }
+  /* Shimmer suave com animation 1.8s */
+  .shimmer-smooth {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--primary) / 0.04) 25%,
+      hsl(var(--accent) / 0.08) 50%,
+      hsl(var(--primary) / 0.04) 75%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 250% 100%;
+    animation: mr-shimmer 1.8s ease-in-out infinite;
+    border-radius: 999px;
+  }
+  /* Texto com gradiente para CTAs */
+  .text-cta {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary-gradient-start)) 0%,
+      hsl(var(--primary-gradient-mid)) 50%,
+      hsl(var(--primary-gradient-start)) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  /* Botões customizados com hover states */
+  .btn-primary {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary-gradient-start)) 0%,
+      hsl(var(--primary-gradient-mid)) 100%
+    );
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.25);
+    transition: all 0.2s ease;
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px hsl(var(--primary) / 0.35);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px hsl(var(--primary) / 0.25);
+  }
+  .btn-outline {
+    border: 1px solid hsl(var(--border));
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+  .btn-outline:hover {
+    background: hsl(var(--accent));
+    border-color: hsl(var(--primary) / 0.3);
+  }
+  .btn-ghost {
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+  .btn-ghost:hover {
+    background: hsl(var(--accent) / 0.5);
+  }
+  .btn-ghost-hover {
+    border: 1px solid hsl(var(--primary) / 0.3);
+    background: hsl(var(--primary) / 0.05);
+  }
+  .btn-ghost-hover:hover {
+    background: hsl(var(--primary) / 0.1);
+    border-color: hsl(var(--primary));
+  }
+  /* Ajustes para badges */
+  .badge-offer {
+    background: hsl(var(--offer) / 0.1);
+    border: 1px solid hsl(var(--offer) / 0.3);
+  }
+  .badge-offer:hover {
+    background: hsl(var(--offer) / 0.15);
+  }
 }

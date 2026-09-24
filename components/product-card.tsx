@@ -55,7 +55,7 @@ export function ProductCard({
   return (
     <Card
       className={cn(
-        "group relative transition-all duration-300 card-hover-elevated product-highlight",
+        "group relative transition-all duration-300 card-hover-elevated product-highlight card-glass",
         isCompact && "p-4",
         !isCompact && "p-5",
       )}

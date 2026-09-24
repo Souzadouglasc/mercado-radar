@@ -330,7 +330,7 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="flex flex-col gap-3" aria-hidden>
       {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="shimmer-pronto h-20 w-full" />
+        <div key={i} className="shimmer-smooth h-20 w-full" />
       ))}
     </div>
   );
@@ -378,10 +378,10 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Hero: busca em destaque + chips rápidos */}
-      <section className="relative overflow-hidden px-4 py-2 lg:py-6 hero-banner">
+      <section className="relative overflow-hidden px-4 py-2 lg:py-6 hero-gradient-moderate">
         <div className="relative z-10">
-          <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl fade-in text-white">
-            Descubra onde sua compra sai <span className="text-gradient">mais barata</span>
+          <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl fade-in text-white">
+            Descubra onde sua compra sai <span className="text-cta">mais barata</span>
           </h1>
           <div className="w-full lg:max-w-2xl mt-4 fade-in-slow">
             <SearchAutocomplete />
@@ -393,7 +393,7 @@ export default function HomePage() {
                 variant="outline"
                 asChild
                 size="sm"
-                className="gap-1.5 scale-hover border-white/20 hover:border-white/40 text-white bg-white/10 backdrop-blur-sm"
+                className="gap-1.5 scale-hover btn-ghost-hover text-white bg-white/10 backdrop-blur-sm"
               >
                 <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
                   <span aria-hidden>{chip.icon}</span> {chip.label}
@@ -402,14 +402,12 @@ export default function HomePage() {
             ))}
           </div>
         </div>
-        {/* Overlay decorativo */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
       </section>
 
       {/* Duas seções side-by-side no desktop */}
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Coluna esquerda: Onde sua lista sai mais barata */}
-        <Card className="hero-card card-hover-elevated">
+        <Card className="card-glass card-hover-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
@@ -417,14 +415,12 @@ export default function HomePage() {
             <CardDescription className="fade-in-slow">Melhor mercado para o rancho do mês (baseado em template).</CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<OndeComprarSkeleton />}>
-              <OndeComprarHoje />
-            </Suspense>
+            <Suspense fallback={<OndeComprarSkeleton />}><OndeComprarHoje /></Suspense>
           </CardContent>
         </Card>
 
         {/* Coluna direita: Ofertas de hoje em São José */}
-        <Card className="hero-card card-hover-elevated">
+        <Card className="card-glass card-hover-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <MapPin className="h-5 w-5 text-primary" aria-hidden /> Ofertas de hoje em São José
@@ -432,9 +428,7 @@ export default function HomePage() {
             <CardDescription className="fade-in-slow">Encartes e coletas recentes com thumbnail.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<OfertasSkeleton />}>
-              <OfertasHoje />
-            </Suspense>
+            <Suspense fallback={<OfertasSkeleton />}><OfertasHoje /></Suspense>
           </CardContent>
         </Card>
       </section>
@@ -442,7 +436,7 @@ export default function HomePage() {
       {/* Seção: Comparador (último preço por mercado) */}
       <section>
         <h2 className="mb-3 text-xl font-bold fade-in">Comparador — último preço por mercado</h2>
-        <Card className="hero-card">
+        <Card className="card-glass">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
@@ -450,9 +444,7 @@ export default function HomePage() {
             <CardDescription className="fade-in-slow">Último preço por mercado, lado a lado.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<SectionSkeleton />}>
-              <Comparador />
-            </Suspense>
+            <Suspense fallback={<SectionSkeleton />}><Comparador /></Suspense>
           </CardContent>
         </Card>
       </section>
@@ -460,7 +452,7 @@ export default function HomePage() {
       {/* Seção: Ofertas em destaque (quedas + mínimos) */}
       <section>
         <h2 className="mb-3 text-xl font-bold fade-in">Ofertas em destaque</h2>
-        <Card className="hero-card">
+        <Card className="card-glass">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 fade-in">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque
@@ -468,9 +460,7 @@ export default function HomePage() {
             <CardDescription className="fade-in-slow">Maiores quedas e mínimos históricos.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<OfertasSkeleton />}>
-              <Ofertas />
-            </Suspense>
+            <Suspense fallback={<OfertasSkeleton />}><Ofertas /></Suspense>
           </CardContent>
         </Card>
       </section>

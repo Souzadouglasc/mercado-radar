@@ -162,9 +162,9 @@ function Resultados({ q, city, group, sort }: { q: string; city: CityFilter; gro
   if (loading) {
     return (
       <div className="flex flex-col gap-2" aria-hidden>
-        <div className="shimmer-fancy h-24 w-full" />
-        <div className="shimmer-fancy h-24 w-full" />
-        <div className="shimmer-fancy h-24 w-full" />
+        <div className="shimmer-smooth h-24 w-full" />
+        <div className="shimmer-smooth h-24 w-full" />
+        <div className="shimmer-smooth h-24 w-full" />
       </div>
     );
   }
@@ -284,7 +284,7 @@ export default async function BuscarPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl lg:text-4xl font-bold fade-in text-gradient">
+      <h1 className="text-3xl lg:text-4xl font-bold fade-in text-cta">
         {q ? `Resultados para “${q}”` : "Buscar produtos"}
       </h1>
 
@@ -292,14 +292,12 @@ export default async function BuscarPage({
       <div className="hero-banner-minimal" />
 
       {/* Header de filtros */}
-      <Card className="hero-card card-hover-elevated">
+      <Card className="card-glass card-hover-elevated">
         <CardContent className="pt-6 pb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Busca */}
             <div className="flex-1 sm:max-w-md">
-              <Suspense fallback={<Skeleton className="shimmer-pronto h-12 w-full rounded-xl" />}>
-                <SearchAutocomplete />
-              </Suspense>
+              <Suspense fallback={<Skeleton className="shimmer-smooth h-12 w-full rounded-xl" />}><SearchAutocomplete /></Suspense>
             </div>
 
             {/* Filtros */}
@@ -371,9 +369,9 @@ export default async function BuscarPage({
       <Suspense
         fallback={
           <div className="flex flex-col gap-3" aria-hidden>
-            <div className="shimmer-pronto h-28 w-full rounded-xl" />
-            <div className="shimmer-pronto h-28 w-full rounded-xl" />
-            <div className="shimmer-pronto h-28 w-full rounded-xl" />
+            <div className="shimmer-smooth h-28 w-full rounded-xl" />
+            <div className="shimmer-smooth h-28 w-full rounded-xl" />
+            <div className="shimmer-smooth h-28 w-full rounded-xl" />
           </div>
         }
       >
