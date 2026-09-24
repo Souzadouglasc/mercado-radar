@@ -1,21 +1,26 @@
-import Image from "next/image";
+"use client";
+
 import Link from "next/link";
-import { TrendingDown } from "lucide-react";
+import { TrendingDown, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FavoriteButton } from "@/components/favorite-button";
 import { Price } from "@/components/price";
+import { ProductImage } from "@/components/product-image";
 import { marketColor, type LatestPrice, type ProductRow } from "@/lib/catalog/queries";
 import { pricePerUnitFromProduct } from "@/lib/catalog/unit-price";
+import { cn } from "@/lib/utils";
 
 export function ProductCard({
   product,
   latest,
   favorite,
+  variant = "default",
 }: {
   product: ProductRow;
   latest: LatestPrice[];
   favorite?: boolean;
+  variant?: "default" | "compact";
 }) {
   const effective = (p: LatestPrice) => p.promotional_price ?? p.price;
   const cheapest =
@@ -33,59 +38,60 @@ export function ProductCard({
       ? Math.round(((avg - effective(cheapest)) / avg) * 100)
       : 0;
 
+  const isCompact = variant === "compact";
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-start justify-between gap-2 text-base">
-          <Link
-            href={`/produtos/${product.slug}`}
-            className="flex min-w-0 items-center gap-2 hover:underline"
-          >
-            {product.image_url ? (
-              <Image
-                src={product.image_url}
-                alt=""
-                width={40}
-                height={40}
-                sizes="40px"
-                loading="lazy"
-                className="h-10 w-10 shrink-0 rounded-md bg-muted object-cover"
+    <Card
+      className={cn(
+        "group transition-all duration-200",
+        "hover:shadow-lg hover:-translate-y-[2px]",
+        isCompact && "p-3",
+        !isCompact && "p-4",
+      )}
+    >
+      {!isCompact && (
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-start justify-between gap-2 text-base">
+            <Link
+              href={`/produtos/${product.slug}`}
+              className="flex min-w-0 items-center gap-3 hover:underline"
+            >
+              <ProductImage
+                image_url={product.image_url}
+                product={{ name: product.name, brand: product.brand }}
+                aspect="square"
+                className="h-14 w-14 shrink-0"
+                alt={product.name}
               />
-            ) : (
-              <span
-                aria-hidden
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-bold text-muted-foreground"
-              >
-                {product.name.slice(0, 1).toUpperCase()}
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{product.name}</span>
+                {product.brand && (
+                  <span className="block truncate text-xs font-normal text-muted-foreground">
+                    {product.brand}
+                  </span>
+                )}
               </span>
+            </Link>
+            {favorite !== undefined && (
+              <FavoriteButton
+                targetType="product"
+                targetId={product.id}
+                initial={favorite}
+                label={`Favoritar ${product.name}`}
+              />
             )}
-            <span className="min-w-0">
-              <span className="block truncate">{product.name}</span>
-              {product.brand && (
-                <span className="block truncate text-xs font-normal text-muted-foreground">
-                  {product.brand}
-                </span>
-              )}
-            </span>
-          </Link>
-          {favorite !== undefined && (
-            <FavoriteButton
-              targetType="product"
-              targetId={product.id}
-              initial={favorite}
-              label={`Favoritar ${product.name}`}
-            />
+          </CardTitle>
+          {discountVsAvg >= 5 && cheapest && (
+            <p className="pt-1">
+              <Badge variant="secondary" className="gap-1 text-[10px] text-offer">
+                <TrendingDown className="h-3 w-3" aria-hidden />
+                {discountVsAvg}% abaixo da média
+              </Badge>
+            </p>
           )}
-        </CardTitle>
-        {discountVsAvg >= 5 && cheapest && (
-          <p>
-            <Badge variant="secondary" className="gap-1 text-[10px] text-offer">
-              <TrendingDown className="h-3 w-3" aria-hidden />
-              {discountVsAvg}% abaixo da média
-            </Badge>
-          </p>
-        )}
-      </CardHeader>
+        </CardHeader>
+      )}
+
       <CardContent className="flex flex-col gap-2">
         {sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem preços ainda.</p>
@@ -105,12 +111,13 @@ export function ProductCard({
                       />
                       <Link
                         href={`/mercados/${p.market.slug}`}
-                        className="hover:underline"
+                        className="hover:underline font-medium"
                       >
                         {p.market.name}
                       </Link>
                       {isCheapest && (
-                        <Badge variant="default" className="text-[10px]">
+                        <Badge variant="default" className="text-[10px] gap-1">
+                          <Trophy className="h-3 w-3" aria-hidden />
                           Menor preço
                         </Badge>
                       )}

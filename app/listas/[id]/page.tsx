@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { CircleAlert, PiggyBank, ShoppingBasket, Trophy } from "lucide-react";
+import { CircleAlert, PiggyBank, ShoppingBasket, Trophy, PackageSearch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Price } from "@/components/price";
+import { ProductImage } from "@/components/product-image";
 import {
   AddItemForm,
   DeleteListButton,
@@ -38,7 +40,7 @@ type Props = { params: Promise<{ id: string }> };
 type ItemRow = {
   id: string;
   quantity: number;
-  product: { id: string; name: string; slug: string };
+  product: { id: string; name: string; slug: string; image_url?: string | null; brand?: string | null; unit?: string | null; quantity?: number | null };
 };
 
 async function Comparacao({ listId, items }: { listId: string; items: ItemRow[] }) {
@@ -254,13 +256,13 @@ export default async function ListaPage({ params }: Props) {
 
   const { data: rawItems } = await supabase
     .from("shopping_list_items")
-    .select("id, quantity, product:products(id, name, slug)")
+    .select("id, quantity, product:products(id, name, slug, image_url, brand, unit, quantity)")
     .eq("list_id", id)
     .order("created_at");
   const items: ItemRow[] = ((rawItems ?? []) as {
     id: string;
     quantity: number | string;
-    product: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[];
+    product: { id: string; name: string; slug: string; image_url?: string | null; brand?: string | null; unit?: string | null; quantity?: number | null } | { id: string; name: string; slug: string; image_url?: string | null; brand?: string | null; unit?: string | null; quantity?: number | null }[];
   }[]).map((r) => ({
     id: r.id,
     quantity: Number(r.quantity),
@@ -302,9 +304,16 @@ export default async function ListaPage({ params }: Props) {
                   >
                     <Link
                       href={`/produtos/${i.product.slug}`}
-                      className="font-medium hover:underline"
+                      className="flex items-center gap-3 font-medium hover:underline"
                     >
-                      {i.product.name}
+                      <ProductImage
+                        image_url={i.product.image_url}
+                        product={{ name: i.product.name, brand: i.product.brand }}
+                        aspect="square"
+                        className="h-12 w-12 shrink-0"
+                        alt={i.product.name}
+                      />
+                      <span className="truncate">{i.product.name}</span>
                     </Link>
                     <span className="flex items-center gap-1">
                       <QuantityStepper
@@ -319,7 +328,7 @@ export default async function ListaPage({ params }: Props) {
                 ))}
               </ul>
             </CardContent>
-          </Card>
+            </Card>
 
           <div className="flex flex-col gap-6">
           <Suspense

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ListChecks, Search, ShoppingCart, TrendingDown, Trophy } from "lucide-react";
+import { ListChecks, Search, ShoppingCart, TrendingDown, Trophy, Tag, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,15 +10,15 @@ import { EmptyState } from "@/components/empty-state";
 import { Price } from "@/components/price";
 import { ProductCard } from "@/components/product-card";
 import { SearchAutocomplete } from "@/components/search-autocomplete";
+import { ProductImage } from "@/components/product-image";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getCachedDeals } from "@/lib/catalog/cached";
-import { latestPricesBatch, type DealRow } from "@/lib/catalog/queries";
+import { latestPricesBatch, type DealRow, type LatestPrice, marketColor } from "@/lib/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Compare preços de supermercados",
-  description:
-    "MercadoRadar compara preços nos mercados Fort, Koch, Brasil e Komprão para você economizar.",
+  description: "MercadoRadar compara preços nos mercados Fort, Koch, Brasil e Komprão para você economizar.",
 };
 
 const PRODUCT_FIELDS = "id, name, slug, brand, unit, quantity, image_url";
@@ -32,6 +32,16 @@ type CardProduct = {
   quantity: number | null;
   image_url: string | null;
 };
+
+// Chips de busca rápida para o hero
+const QUICK_SEARCH_CHIPS = [
+  { label: "Arroz", query: "arroz", icon: "🍚" },
+  { label: "Carne", query: "carne", icon: "🥩" },
+  { label: "Limpeza", query: "detergente", icon: "🧽" },
+  { label: "Bebidas", query: "refrigerante", icon: "🥤" },
+  { label: "Hortifruti", query: "frutas", icon: "🥦" },
+  { label: "Laticínios", query: "leite", icon: "🥛" },
+];
 
 async function Comparador() {
   if (!isSupabaseConfigured()) {
@@ -48,7 +58,7 @@ async function Comparador() {
     .select(PRODUCT_FIELDS)
     .eq("active", true)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(6);
   const rows = (products ?? []) as CardProduct[];
   if (rows.length === 0) {
     return (
@@ -75,8 +85,8 @@ async function Comparador() {
     );
   }
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {comPreco.slice(0, 3).map((c) => (
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {comPreco.slice(0, 6).map((c) => (
         <li key={c.product.id}>
           <ProductCard product={c.product} latest={c.latest} />
         </li>
@@ -85,7 +95,7 @@ async function Comparador() {
   );
 }
 
-/** Card "Onde comprar hoje": melhor mercado (menor média dos últimos preços). */
+/** Card "Onde sua lista sai mais barata": melhor mercado (menor média dos últimos preços). */
 async function OndeComprarHoje() {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
@@ -129,14 +139,10 @@ async function OndeComprarHoje() {
   const best = ranked[0];
   const rest = ranked.slice(1, 4);
   return (
-    <Card
-      className="border-2 border-primary lg:flex lg:items-center lg:justify-between lg:gap-6 lg:px-2"
-      role="region"
-      aria-label="Onde comprar hoje"
-    >
+    <Card className="border-2 border-primary lg:flex lg:items-center lg:justify-between lg:gap-6 lg:px-2" role="region" aria-label="Onde comprar hoje">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde comprar hoje
+          <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
         </CardTitle>
         <CardDescription>Menor média dos preços coletados recentemente.</CardDescription>
       </CardHeader>
@@ -147,8 +153,7 @@ async function OndeComprarHoje() {
           </Link>
           <span className="text-xs text-muted-foreground">
             média de {ranked.length} {ranked.length === 1 ? "mercado" : "mercados"} monitorados
-            {rest.length > 0 &&
-              ` · depois: ${rest.map((m) => m.name).join(", ")}`}
+            {rest.length > 0 && ` · depois: ${rest.map((m) => m.name).join(", ")}`}
           </span>
         </span>
         <Button asChild size="sm" className="w-fit">
@@ -156,6 +161,56 @@ async function OndeComprarHoje() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+/** Ofertas de hoje em São José - usando dados de encartes/coletas recentes */
+async function OfertasHoje() {
+  if (!isSupabaseConfigured()) return null;
+  const { drops, lows } = await getCachedDeals();
+  const allDeals = [...drops, ...lows].slice(0, 6);
+
+  if (allDeals.length === 0) {
+    return (
+      <EmptyState
+        icon={Tag}
+        title="Sem ofertas em destaque hoje"
+        description="Com mais coletas de preço, mostramos aqui as melhores ofertas de São José."
+      />
+    );
+  }
+
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {allDeals.map((d) => (
+        <li key={d.id}>
+          <Link
+            href={`/produtos/${d.slug}`}
+            className="flex flex-col gap-2 rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-[2px]"
+          >
+            <ProductImage
+              image_url={d.image_url}
+              product={{ name: d.name, brand: d.brand }}
+              aspect="landscape"
+              className="w-full"
+              alt={d.name}
+            />
+            <div className="p-3 flex flex-col gap-1">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <span className="truncate">{d.name}</span>
+                <Badge variant={d.dropPercent > 0 ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                  {d.dropPercent > 0 ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
+                </Badge>
+              </span>
+              <span className="text-xs text-muted-foreground">{d.marketName}</span>
+              <div className="flex items-baseline gap-2 pt-1">
+                <Price value={d.current} size="lg" />
+              </div>
+            </div>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -180,10 +235,7 @@ function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
             <span className="flex min-w-0 flex-col">
               <span className="flex items-center gap-2 text-sm font-medium">
                 <span className="truncate">{d.name}</span>
-                <Badge
-                  variant={kind === "drop" ? "default" : "secondary"}
-                  className="shrink-0 text-[10px]"
-                >
+                <Badge variant={kind === "drop" ? "default" : "secondary"} className="shrink-0 text-[10px]">
                   {kind === "drop" ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
                 </Badge>
               </span>
@@ -284,10 +336,48 @@ function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
+function HeroSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden>
+      <Skeleton className="shimmer h-10 w-3/4" />
+      <Skeleton className="shimmer h-12 w-full lg:max-w-2xl" />
+      <Skeleton className="shimmer h-10 w-full" />
+    </div>
+  );
+}
+
+function OndeComprarSkeleton() {
+  return (
+    <Card className="border-2 border-primary">
+      <CardHeader className="pb-2">
+        <Skeleton className="shimmer h-6 w-48" />
+        <Skeleton className="shimmer h-4 w-64" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="shimmer h-8 w-48" />
+        <Skeleton className="shimmer h-4 w-40" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function OfertasSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton className="shimmer h-6 w-40" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="shimmer aspect-[4/3] w-full rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
-      {/* Hero: busca em destaque; no desktop ocupa largura maior */}
+      {/* Hero: busca em destaque + chips rápidos */}
       <section className="flex flex-col gap-4 py-2 lg:py-6">
         <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
           Descubra onde sua compra sai <span className="text-primary">mais barata</span>
@@ -295,26 +385,60 @@ export default function HomePage() {
         <div className="w-full lg:max-w-2xl">
           <SearchAutocomplete />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild size="sm">
-            <Link href="/buscar">
-              <Search className="h-4 w-4" /> Busca avançada
-            </Link>
-          </Button>
-          <Button variant="outline" asChild size="sm">
-            <Link href="/listas">
-              <ListChecks className="h-4 w-4" /> Minhas listas
-            </Link>
-          </Button>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Buscas rápidas">
+          {QUICK_SEARCH_CHIPS.map((chip) => (
+            <Button
+              key={chip.query}
+              variant="outline"
+              asChild
+              size="sm"
+              className="gap-1.5"
+            >
+              <Link href={`/buscar?q=${encodeURIComponent(chip.query)}`}>
+                <span aria-hidden>{chip.icon}</span> {chip.label}
+              </Link>
+            </Button>
+          ))}
         </div>
       </section>
 
-      <Suspense fallback={<Skeleton className="shimmer h-32 w-full rounded-xl" />}>
-        <OndeComprarHoje />
-      </Suspense>
+      {/* Duas seções side-by-side no desktop */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        {/* Coluna esquerda: Onde sua lista sai mais barata */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-primary" aria-hidden /> Onde sua lista sai mais barata
+            </CardTitle>
+            <CardDescription>Melhor mercado para o rancho do mês (baseado em template).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<OndeComprarSkeleton />}>
+              <OndeComprarHoje />
+            </Suspense>
+          </CardContent>
+        </Card>
 
-      <section className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+        {/* Coluna direita: Ofertas de hoje em São José */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" aria-hidden /> Ofertas de hoje em São José
+            </CardTitle>
+            <CardDescription>Encartes e coletas recentes com thumbnail.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<OfertasSkeleton />}>
+              <OfertasHoje />
+            </Suspense>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Seção: Comparador (último preço por mercado) */}
+      <section>
+        <h2 className="mb-3 text-xl font-bold">Comparador — último preço por mercado</h2>
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Comparador
@@ -327,7 +451,12 @@ export default function HomePage() {
             </Suspense>
           </CardContent>
         </Card>
-        <Card className="lg:col-span-2">
+      </section>
+
+      {/* Seção: Ofertas em destaque (quedas + mínimos) */}
+      <section>
+        <h2 className="mb-3 text-xl font-bold">Ofertas em destaque</h2>
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-primary" aria-hidden /> Ofertas em destaque
@@ -335,13 +464,14 @@ export default function HomePage() {
             <CardDescription>Maiores quedas e mínimos históricos.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<SectionSkeleton lines={2} />}>
+            <Suspense fallback={<OfertasSkeleton />}>
               <Ofertas />
             </Suspense>
           </CardContent>
         </Card>
       </section>
 
+      {/* Seção: Mercados monitorados */}
       <section>
         <h2 className="mb-3 text-xl font-bold">Mercados monitorados</h2>
         <Suspense fallback={<SectionSkeleton lines={4} />}>
