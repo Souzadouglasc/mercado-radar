@@ -5,7 +5,7 @@ export interface JsonLdProduct {
   name: string;
   sku?: string;
   brand?: string;
-  image?: string | string[];
+  image?: string; // normalized to single string in normalizeJsonLd
   offers?: { price?: string | number; availability?: string };
 }
 
