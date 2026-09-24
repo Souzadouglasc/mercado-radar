@@ -7,7 +7,7 @@ import type { OsuperMarketConfig } from "./osuper.js";
  * v1 usa sitemap + JSON-LD; apiUrl/storeId documentados p/ GraphQL futuro.
  */
 export const fortConfig: OsuperMarketConfig = {
-  marketSlug: "fort-atacadista",
+  marketSlug: "fort",
   siteUrl: "https://fortatacadista.com.br",
   apiUrl: "https://api.fortatacadista.com.br/storefront/graphql",
   storeId: "1585",

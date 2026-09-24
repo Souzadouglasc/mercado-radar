@@ -9,7 +9,7 @@ import type { OsuperMarketConfig } from "./osuper.js";
  * placeholder documentado; ver scrapers/README.md ("descobrir storeId").
  */
 export const kochConfig: OsuperMarketConfig = {
-  marketSlug: "superkoch",
+  marketSlug: "koch",
   siteUrl: "https://www.superkoch.com.br",
   apiUrl: "https://api.superkoch.com.br/storefront/graphql",
   storeId: "TODO-descobrir-via-bundle-ou-trafego",

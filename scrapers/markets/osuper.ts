@@ -2,7 +2,7 @@ import { extractJsonLdProduct, toProductPrice } from "./jsonld.js";
 import type { ProductPrice, ScrapeResult, UrlOutcome } from "../core/types.js";
 
 export interface OsuperMarketConfig {
-  /** Slug em `markets.slug` (ex.: "fort-atacadista"). */
+  /** Slug em `markets.slug` (ex.: "fort"). */
   marketSlug: string;
   /** URL base da loja (ex.: https://fortatacadista.com.br). */
   siteUrl: string;
