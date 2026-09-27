@@ -205,4 +205,3 @@ export class OsuperProvider extends BaseHttpProvider {
     };
   }
 }
-
