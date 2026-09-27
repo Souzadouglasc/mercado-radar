@@ -344,4 +344,3 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
     return { ...result, stats: this.toRunStats(result) };
   }
 }
-
