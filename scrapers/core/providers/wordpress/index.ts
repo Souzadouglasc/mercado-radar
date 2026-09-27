@@ -1,7 +1,8 @@
 /**
  * WordPress Provider - MercadoRadar
  * Provider para mercados WordPress (Brasil Atacadista, Komprão).
- * Estratégia: wp-json REST API → busca posts/páginas → extrai imagens → NormalizedProduct com price=0 (source='encarte')
+ * Estratégia: wp-json REST API → busca páginas de oferta → lê JSON-LD Product com preço válido.
+ * Imagens de encarte são identificadas, mas não viram preços sem OCR validado.
  */
 
 import { BaseHttpProvider } from "../../providers/base-http-provider.js";
@@ -107,6 +108,8 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     }
 
     // A page only becomes a product when it publishes a structured, valid price.
+    // Some WordPress themes inject JSON-LD into the rendered page rather than
+    // the REST payload's content field, so fetch that page as a fallback.
     const items: NormalizedProduct[] = [];
     const outcomes: UrlOutcome[] = [];
 
@@ -114,7 +117,24 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
       const sr = searchResults[i];
       await this.sleep(throttleMs); // throttle sequencial
       try {
-        const products = sr.jsonLd
+        let jsonLd = sr.jsonLd;
+        const sourceHost = new URL(sr.url).hostname.replace(/^www\./i, "");
+        const marketHost = new URL(this.wpConfig.siteUrl).hostname.replace(/^www\./i, "");
+        if (!jsonLd.length && sourceHost === marketHost) {
+          try {
+            const html = await this.fetchText(sr.url, options.retries ?? this.defaultRetries);
+            jsonLd = extractJsonLdProducts(html);
+          } catch (err) {
+            outcomes.push({
+              url: sr.url,
+              ok: false,
+              error: `product_page_fetch_failed: ${err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160)}`,
+            });
+            continue;
+          }
+        }
+
+        const products = jsonLd
           .map((jsonld) => toProductPrice({ jsonld, marketSlug: this.slug, sourceUrl: sr.url, collectedAt: new Date().toISOString() }))
           .filter((product): product is NonNullable<typeof product> => product !== null);
         if (products.length === 0) {
@@ -198,9 +218,26 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
             images: [...new Set(images)],
             jsonLd: extractJsonLdProducts(post.content?.rendered ?? ""),
           });
+        } else {
+          results.push({
+            id: -1,
+            title: "Oferta",
+            url,
+            date: new Date().toISOString(),
+            images: [],
+            jsonLd: [],
+          });
         }
       } catch (err) {
         console.error(`[${this.slug}] Erro ao buscar action URL ${url}:`, err);
+        results.push({
+          id: -1,
+          title: "Oferta",
+          url,
+          date: new Date().toISOString(),
+          images: [],
+          jsonLd: [],
+        });
       }
     }
 
@@ -216,6 +253,7 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     }
 
     const results: WpSearchResult[] = [];
+    const seenPostIds = new Set<number>();
 
     for (const term of this.wpConfig.searchTerms) {
       if (results.length >= limit) break;
@@ -231,10 +269,12 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
 
       for (const sr of searchResults) {
         if (results.length >= limit) break;
+        if (seenPostIds.has(sr.id)) continue;
 
         // Fetch full post/page with _embed to get featured media
         const postUrl = `${this.wpConfig.wpJsonUrl}/wp/v2/${this.wpConfig.postType}s/${sr.id}?_embed`;
         const post = await this.fetchJson<WpPost>(postUrl);
+        seenPostIds.add(post.id);
 
         // Filtro por cidade (Komprão)
         if (this.wpConfig.city && this.wpConfig.postType === "page") {

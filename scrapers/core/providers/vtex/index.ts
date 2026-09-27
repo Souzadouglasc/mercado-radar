@@ -65,6 +65,7 @@ interface VtexProduct {
 
 interface VtexCategory {
   id?: number | string;
+  name?: string;
   children?: VtexCategory[];
 }
 
@@ -76,7 +77,7 @@ function categoryIds(tree: VtexCategory[]): string[] {
   const seen = new Set<string>();
   while (pending.length) {
     const category = pending.shift();
-    if (!category || category.id == null) continue;
+    if (!category || category.id == null || /^z:\s*category$/i.test(category.name?.trim() ?? "")) continue;
     const id = String(category.id);
     if (!seen.has(id)) {
       seen.add(id);
@@ -202,9 +203,9 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
       categoryError = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
     }
 
-    // Cada busca VTEX pode paginar até 2.500 itens. Percorremos todas as
-    // categorias (inclusive pais) e espalhamos os offsets entre elas para
-    // cobrir catálogos extensos sem insistir sempre no primeiro lote.
+    // Uma janela VTEX vai até 2.500 resultados por categoria. Percorremos
+    // categorias e páginas em rodízio, ignorando categorias virtuais sem
+    // produtos e eliminando o mesmo SKU quando ele aparece em categorias pai/filha.
     const maxPagesPerCategory = Math.ceil(MAX_CATALOG_RESULTS / pageSize);
     const pageDescriptors: Array<{ categoryId?: string; page: number }> = [];
     if (categories.length) {
@@ -215,10 +216,19 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
       for (let page = 0; page < maxPagesPerCategory; page++) pageDescriptors.push({ page });
     }
     const startPage = Math.floor(Math.max(0, options.skip ?? 0) / pageSize) % pageDescriptors.length;
-    const pagesToFetch = Math.ceil(count / pageSize);
-    const ranges: CatalogRange[] = [];
-    for (let i = 0; i < pagesToFetch; i++) {
-      const descriptor = pageDescriptors[(startPage + i) % pageDescriptors.length];
+    const orderedDescriptors = [...pageDescriptors.slice(startPage), ...pageDescriptors.slice(0, startPage)];
+    const items: NormalizedProduct[] = [];
+    const outcomes: UrlOutcome[] = categoryError
+      ? [{ url: categoriesUrl, ok: false, error: `category_tree_unavailable: ${categoryError}` }]
+      : [{ url: categoriesUrl, ok: true }];
+    const seenItems = new Set<string>();
+    const batchSize = Math.max(1, concurrency * 2);
+    let nextDescriptor = 0;
+
+    while (nextDescriptor < orderedDescriptors.length && items.length < count) {
+      const descriptors = orderedDescriptors.slice(nextDescriptor, nextDescriptor + batchSize);
+      nextDescriptor += descriptors.length;
+      const ranges: CatalogRange[] = descriptors.map((descriptor) => {
       const from = descriptor.page * pageSize;
       const to = Math.min(from + pageSize - 1, MAX_CATALOG_RESULTS - 1);
       const url = new URL(this.config.catalogApiUrl);
@@ -226,13 +236,13 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
       url.searchParams.set("_to", String(to));
       if (descriptor.categoryId) url.searchParams.set("fq", `C:/${descriptor.categoryId}/`);
       if (this.config.salesChannel) url.searchParams.set("sc", this.config.salesChannel);
-      ranges.push({ url: url.toString() });
-    }
+        return { url: url.toString() };
+      });
 
-    const pageErrors: Array<string | undefined> = new Array(ranges.length);
-    const pages = await this.parallelWithThrottle<VtexProduct[]>(
-      ranges.map((range) => range.url),
-      async (url, index) => {
+      const pageErrors: Array<string | undefined> = new Array(ranges.length);
+      const pages = await this.parallelWithThrottle<VtexProduct[]>(
+        ranges.map((range) => range.url),
+        async (url, index) => {
         try {
           const products = await this.fetchJson<unknown>(url, retries);
           if (!Array.isArray(products)) throw new Error("vtex_catalog_response_not_array");
@@ -241,32 +251,40 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
           pageErrors[index] = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
           return [];
         }
-      },
-      { concurrency, throttleMs, onProgress: options.onProgress },
-    );
+        },
+        { concurrency, throttleMs, onProgress: options.onProgress },
+      );
 
-    const items: NormalizedProduct[] = [];
-    const outcomes: UrlOutcome[] = categoryError
-      ? [{ url: categoriesUrl, ok: false, error: `category_tree_unavailable: ${categoryError}` }]
-      : [{ url: categoriesUrl, ok: true }];
-    for (let i = 0; i < ranges.length; i++) {
-      const range = ranges[i];
-      const products = pages[i] ?? [];
-      const rawItems = mapVtexProducts(products, {
-        marketSlug: this.slug,
-        siteUrl: this.config.siteUrl,
-        collectedAt: finishedNow(),
-      });
-      for (const raw of rawItems) items.push(await this.normalizeItem(raw));
+      for (let i = 0; i < ranges.length && items.length < count; i++) {
+        const products = pages[i] ?? [];
+        const rawItems = mapVtexProducts(products, {
+          marketSlug: this.slug,
+          siteUrl: this.config.siteUrl,
+          collectedAt: finishedNow(),
+        });
+        let newItems = 0;
+        for (const raw of rawItems) {
+          const key = raw.sku
+            ? `sku:${raw.sku}`
+            : raw.barcode
+              ? `ean:${raw.barcode}`
+              : `name:${raw.name.toLocaleLowerCase("pt-BR")}`;
+          if (seenItems.has(key)) continue;
+          seenItems.add(key);
+          items.push(await this.normalizeItem(raw));
+          newItems++;
+          if (items.length >= count) break;
+        }
 
-      const error = pageErrors[i];
-      outcomes.push(error
-        ? { url: range.url, ok: false, error }
-        : rawItems.length
-          ? { url: range.url, ok: true }
-          : products.length
-            ? { url: range.url, ok: false, error: "no_available_price_in_vtex_page" }
-            : { url: range.url, ok: true });
+        const error = pageErrors[i];
+        outcomes.push(error
+          ? { url: ranges[i].url, ok: false, error }
+          : newItems
+            ? { url: ranges[i].url, ok: true }
+            : products.length
+              ? { url: ranges[i].url, ok: false, error: "no_new_available_price_in_vtex_page" }
+              : { url: ranges[i].url, ok: true });
+      }
     }
 
     const finishedAt = finishedNow();
@@ -319,7 +337,7 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
       { concurrency, throttleMs, onProgress: options.onProgress },
     );
 
-    const items = pageItems.flatMap((page) => page ?? []);
+    const items = pageItems.flatMap((page) => page ?? []).slice(0, options.limit);
     const outcomes = urls.map((url, index) => ({ url, ok: (pageItems[index]?.length ?? 0) > 0, error: errors[index] }));
     const finishedAt = new Date().toISOString();
     const result = { items, outcomes, startedAt, finishedAt } as CollectResult;
