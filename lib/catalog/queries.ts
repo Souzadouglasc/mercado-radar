@@ -11,7 +11,7 @@ export type Market = {
 
 export type CityFilter = string | null; // null = todas
 
-function cityValues(city: CityFilter): string[] | null {
+function cityValues(city?: CityFilter): string[] | null {
   if (!city) return null;
   if (city === "sao-jose") return ["São José", "São José (atendida por Palhoça)"];
   if (city === "florianopolis") return ["Florianópolis"];
