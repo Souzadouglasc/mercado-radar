@@ -87,6 +87,7 @@ jobs:
 
   scrape-fallback:
     name: Scrape Fallback (Traditional)
+    needs: dispatch
     if: needs.dispatch.outputs.hasWork == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
