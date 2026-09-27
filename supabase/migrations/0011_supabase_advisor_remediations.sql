@@ -228,4 +228,3 @@ CREATE INDEX IF NOT EXISTS shopping_lists_user_id_fk_idx ON public.shopping_list
 
 DROP INDEX IF EXISTS public.prices_market_collected_idx2;
 
-
