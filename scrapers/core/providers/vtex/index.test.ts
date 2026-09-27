@@ -57,4 +57,3 @@ test("does not treat regular VTEX prices as promotional prices", () => {
   assert.equal(item.price, 25.5);
   assert.equal(item.promotionalPrice, null);
 });
-
