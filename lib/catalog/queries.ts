@@ -73,12 +73,27 @@ export async function latestPricesBatch(
   const out = new Map<string, LatestPrice[]>();
   if (productIds.length === 0) return out;
 
-  // Tenta RPC primeiro (sem filtro de cidade no RPC atual; fallback faz o filtro)
+  const cities = cityValues(city);
+  let allowedMarketIds: Set<string> | null = null;
+  if (cities) {
+    const { data: markets, error: marketError } = await supabase
+      .from("markets")
+      .select("id")
+      .eq("active", true)
+      .in("city", cities);
+    if (!marketError && markets) {
+      allowedMarketIds = new Set(markets.map((market) => market.id));
+    }
+  }
+
+  // A RPC já retorna somente o preço mais recente por produto e mercado.
+  // Aplicar o filtro regional por IDs evita truncar resultados em consultas grandes.
   const { data, error } = await supabase.rpc("latest_prices_for_products", {
     p_ids: productIds,
   });
-  if (!error && data && !city) {
+  if (!error && data && (!cities || allowedMarketIds)) {
     for (const r of data as RpcLatestRow[]) {
+      if (allowedMarketIds && !allowedMarketIds.has(r.market_id)) continue;
       const list = out.get(r.product_id) ?? [];
       list.push(toLatest(r));
       out.set(r.product_id, list);
@@ -97,7 +112,6 @@ export async function latestPricesBatch(
     .order("collected_at", { ascending: false })
     .limit(Math.min(500, productIds.length * 20));
 
-  const cities = cityValues(city);
   if (cities) {
     query = query.in("markets.city", cities);
   }
@@ -147,10 +161,11 @@ export async function searchProducts(
 ): Promise<(ProductRow & { latest: LatestPrice[] })[]> {
   const term = q.trim().slice(0, 80);
   if (!term) return [];
+  const searchLimit = Math.min(250, Math.max(limit, limit * 4));
   let rows: ProductRow[] = [];
   const { data: ft, error: ftError } = await supabase.rpc("search_products_ft", {
     p_term: term,
-    p_limit: limit,
+    p_limit: searchLimit,
     p_city: city ?? null,
   });
   if (!ftError && ft) {
@@ -166,10 +181,10 @@ export async function searchProducts(
       .eq("active", true)
       .or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
       .order("name")
-      .limit(limit);
+      .limit(searchLimit);
     const cities = cityValues(city);
     if (cities) {
-      // Join com markets via prices para filtrar pela região selecionada.
+      // Join com markets via prices para filtrar por cidade
       const citySql = cities.map((value) => `'${value.replace(/'/g, "''")}'`).join(",");
       query = query.filter("id", "in", `(
         select distinct product_id from prices p
@@ -182,12 +197,61 @@ export async function searchProducts(
     rows = products as ProductRow[];
   }
   if (rows.length === 0) return [];
-  const batch = await latestPricesBatch(
-    supabase,
-    rows.map((p) => p.id),
-    city,
+
+  const { data: matchedRefs } = await supabase
+    .from("products")
+    .select("id, normalized_id")
+    .in("id", rows.map((product) => product.id));
+  const canonicalByProduct = new Map(
+    ((matchedRefs ?? []) as { id: string; normalized_id: string | null }[])
+      .map((reference) => [reference.id, reference.normalized_id]),
   );
-  return rows.map((p) => ({ ...p, latest: batch.get(p.id) ?? [] }));
+  const canonicalIds = [...new Set([...canonicalByProduct.values()].filter((id): id is string => Boolean(id)))];
+
+  let candidates: (ProductRow & { normalized_id?: string | null })[] = rows;
+  if (canonicalIds.length > 0) {
+    const { data: variants, error: variantsError } = await supabase
+      .from("products")
+      .select(`${PRODUCT_FIELDS}, normalized_id`)
+      .eq("active", true)
+      .in("normalized_id", canonicalIds);
+    if (!variantsError && variants) {
+      candidates = [...rows, ...(variants as (ProductRow & { normalized_id: string | null })[])];
+    }
+  }
+
+  const groups = new Map<string, { product: ProductRow; productIds: Set<string> }>();
+  const seenProductIds = new Set<string>();
+  for (const candidate of candidates) {
+    if (seenProductIds.has(candidate.id)) continue;
+    seenProductIds.add(candidate.id);
+    const canonicalId = candidate.normalized_id ?? canonicalByProduct.get(candidate.id) ?? null;
+    const fallbackKey = [candidate.brand ?? "", candidate.name, candidate.quantity ?? "", candidate.unit ?? ""]
+      .join("|")
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const key = canonicalId ? `canonical:${canonicalId}` : `raw:${fallbackKey}`;
+    const group = groups.get(key) ?? { product: candidate, productIds: new Set<string>() };
+    if (!group.product.image_url && candidate.image_url) group.product.image_url = candidate.image_url;
+    group.productIds.add(candidate.id);
+    groups.set(key, group);
+  }
+
+  const allProductIds = [...new Set([...groups.values()].flatMap((group) => [...group.productIds]))];
+  const batch = await latestPricesBatch(supabase, allProductIds, city);
+  return [...groups.values()].map(({ product, productIds }) => {
+    const byMarket = new Map<string, LatestPrice>();
+    for (const productId of productIds) {
+      for (const price of batch.get(productId) ?? []) {
+        const current = byMarket.get(price.market_id);
+        if (!current || price.collected_at > current.collected_at) byMarket.set(price.market_id, price);
+      }
+    }
+    return { ...product, latest: [...byMarket.values()] };
+  }).slice(0, limit);
 }
 
 export type ProductStats = {
@@ -271,6 +335,7 @@ export async function priceHistory(
 }
 
 export type DealRow = ProductRow & {
+  normalized_id?: string | null;
   current: number;
   reference: number;
   dropPercent: number;
@@ -281,11 +346,11 @@ export type DealRow = ProductRow & {
 async function candidateProducts(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("products")
-    .select(PRODUCT_FIELDS)
+    .select(`${PRODUCT_FIELDS}, normalized_id`)
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(60);
-  return (data ?? []) as ProductRow[];
+  return (data ?? []) as (ProductRow & { normalized_id: string | null })[];
 }
 
 type WindowRow = { productId: string; price: number; collected_at: string };
@@ -691,4 +756,3 @@ export async function latestPricesForCanonicalProducts(
 ): Promise<Map<string, LatestPrice[]>> {
   return latestPricesBatch(supabase, canonicalIds, city);
 }
-
