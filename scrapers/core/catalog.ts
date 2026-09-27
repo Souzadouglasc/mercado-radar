@@ -60,17 +60,19 @@ export class ProductCatalog {
     if (marketId) {
       const { data: alias } = await this.supabase
         .from("product_aliases")
-        .select("product_id")
+        .select("canonical_id")
         .eq("market_id", marketId)
         .eq("raw_name", product.rawName)
+        .not("canonical_id", "is", null)
+        .limit(1)
         .maybeSingle();
       
-      if (alias) {
+      if (alias?.canonical_id) {
         await this.supabase
           .from("canonical_products")
           .update({ updated_at: product.collectedAt })
-          .eq("id", alias.product_id);
-        return { productId: alias.product_id, isNew: false, matchedBy: "alias" };
+          .eq("id", alias.canonical_id);
+        return { productId: alias.canonical_id, isNew: false, matchedBy: "alias" };
       }
     }
 
@@ -83,15 +85,6 @@ export class ProductCatalog {
       .maybeSingle();
     
     if (byCanonical) {
-      // Registra alias para próximas vezes
-      if (marketId) {
-        await this.supabase.from("product_aliases").upsert({
-          product_id: byCanonical.id,
-          market_id: marketId,
-          raw_name: product.rawName,
-          market_sku: product.marketSku,
-        }, { onConflict: "product_id,market_id,raw_name" });
-      }
       await this.supabase
         .from("canonical_products")
         .update({ updated_at: product.collectedAt })
@@ -131,16 +124,6 @@ export class ProductCatalog {
       throw new Error(`Falha ao criar canonical_product: ${insertError?.message ?? "unknown"}`);
     }
 
-    // 5. Registra alias
-    if (marketId) {
-      await this.supabase.from("product_aliases").upsert({
-        product_id: inserted.id,
-        market_id: marketId,
-        raw_name: product.rawName,
-        market_sku: product.marketSku,
-      }, { onConflict: "product_id,market_id,raw_name" });
-    }
-
     return { productId: inserted.id, isNew: true, matchedBy: "new" };
   }
 
@@ -175,3 +158,4 @@ export class ProductCatalog {
     return data?.id ?? null;
   }
 }
+
