@@ -22,8 +22,8 @@ import { cn } from "@/lib/utils";
 
 const CITIES: { value: CityFilter; label: string }[] = [
   { value: null, label: "Todas as cidades" },
-  { value: "sao-jose", label: "São José dos Campos" },
-  // Adicione mais cidades conforme necessário
+  { value: "sao-jose", label: "São José e região" },
+  { value: "florianopolis", label: "Florianópolis" },
 ];
 
 const SORT_OPTIONS = [
@@ -99,7 +99,7 @@ function ProductGrid({
   sort: string;
 }) {
   // Apply sorting
-  let sorted = [...products];
+  const sorted = [...products];
   
   switch (sort) {
     case "price_asc":
