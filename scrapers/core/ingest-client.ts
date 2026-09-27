@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const SOURCE_IDS: Record<NormalizedProduct["source"], number> = {
   "site-jsonld": 1,
+  "catalog-api": 5,
   graphql: 2,
   manual: 3,
   encarte: 4,
@@ -19,7 +20,7 @@ export interface IngestItem {
   promotional_price: number | null;
   market_slug: string;
   source_url: string | null;
-  source: "site-jsonld" | "graphql" | "manual" | "encarte";
+  source: "site-jsonld" | "catalog-api" | "graphql" | "manual" | "encarte";
   collected_at: string;
   image_url: string | null;
   canonical_product_id: string; // FK para canonical_products
@@ -49,8 +50,6 @@ function slugify(value: string): string {
 interface MarketRow { id: string; slug: string }
 interface RunRow { id: string }
 interface ProductRow { id: string }
-interface AliasRow { product_id: string }
-
 export class IngestClient {
   private supabase: SupabaseClient;
 
@@ -74,9 +73,16 @@ export class IngestClient {
     if (marketsError) throw new Error(`Falha ao buscar mercados: ${marketsError.message}`);
     const marketBySlug = new Map((markets as MarketRow[]).map((m) => [m.slug, m.id]));
 
+    const uniqueMarketIds = [...new Set(marketBySlug.values())];
+    const runRow: Record<string, unknown> = {
+      status: "PARTIAL",
+      products_found: items.length,
+    };
+    if (uniqueMarketIds.length === 1) runRow.market_id = uniqueMarketIds[0];
+
     const { data: run, error: runError } = await this.supabase
       .from("scrape_runs")
-      .insert({ status: "PARTIAL", products_found: items.length })
+      .insert(runRow)
       .select("id")
       .single();
     if (runError) throw new Error(`Falha ao registrar run: ${runError.message}`);
@@ -235,3 +241,4 @@ export class IngestClient {
 export function createIngestClient(): IngestClient {
   return new IngestClient();
 }
+

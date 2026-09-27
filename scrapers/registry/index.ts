@@ -5,12 +5,15 @@
  */
 
 import type { MarketProvider, MarketRegistryEntry, ProviderFactory } from "../core/provider.js";
-import { OsuperProvider } from "../core/providers/osuper/index.js";
-import { WordPressProvider } from "../core/providers/wordpress/index.js";
+import { getEnabledMarkets } from "../config/markets.config.js";
+import { OsuperProvider, type OsuperProviderConfig } from "../core/providers/osuper/index.js";
+import { WordPressProvider, type WordPressProviderConfig } from "../core/providers/wordpress/index.js";
+import { VtexProvider, type VtexProviderConfig } from "../core/providers/vtex/index.js";
 
 const PROVIDER_FACTORIES: Record<string, ProviderFactory> = {
-  osuper: (config) => new OsuperProvider(config as any),
-  wordpress: (config) => new WordPressProvider(config as any),
+  osuper: (config) => new OsuperProvider(config as unknown as OsuperProviderConfig),
+  wordpress: (config) => new WordPressProvider(config as unknown as WordPressProviderConfig),
+  vtex: (config) => new VtexProvider(config as unknown as VtexProviderConfig),
 };
 
 class ProviderRegistry {
@@ -73,6 +76,6 @@ export const providerRegistry = new ProviderRegistry();
 
 /** Inicializa o registry com a config padrão */
 export function initializeRegistry(entries?: MarketRegistryEntry[]): void {
-  const { getEnabledMarkets } = require("../config/markets.config.js");
   providerRegistry.initialize(entries ?? getEnabledMarkets());
 }
+

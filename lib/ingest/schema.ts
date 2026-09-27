@@ -11,7 +11,7 @@ export const productPriceSchema = z.object({
   promotional_price: z.number().positive().nullish(),
   market_slug: z.string().min(1).max(80),
   source_url: z.string().url().max(2000).nullish(),
-  source: z.enum(["site-jsonld", "graphql", "manual", "encarte"]).default("site-jsonld"),
+  source: z.enum(["site-jsonld", "catalog-api", "graphql", "manual", "encarte"]).default("site-jsonld"),
   collected_at: z.string().datetime({ offset: true }),
   image_url: z.string().url().max(2000).nullish(),
 });
@@ -21,3 +21,4 @@ export const ingestBodySchema = z.object({
 });
 
 export type ProductPrice = z.infer<typeof productPriceSchema>;
+

@@ -95,6 +95,36 @@ export const MARKETS_CONFIG: MarketsConfig = {
         maxErrorRate: 0.8,
       },
     },
+    {
+      slug: "bistek",
+      name: "Bistek - Florianópolis (Ilha)",
+      provider: "vtex",
+      enabled: true,
+      config: {
+        marketSlug: "bistek",
+        siteUrl: "https://www.bistek.com.br",
+        catalogApiUrl: "https://www.bistek.com.br/api/catalog_system/pub/products/search",
+        city: "Florianópolis",
+        pageSize: 50,
+      },
+      schedule: { cron: "0 9 * * 1-6" },
+      baseline: { minProducts: 100, maxErrorRate: 0.5 },
+    },
+    {
+      slug: "angeloni",
+      name: "Angeloni - Beira-Mar",
+      provider: "vtex",
+      enabled: true,
+      config: {
+        marketSlug: "angeloni",
+        siteUrl: "https://super.angeloni.com.br",
+        catalogApiUrl: "https://super.angeloni.com.br/api/catalog_system/pub/products/search",
+        city: "Florianópolis",
+        pageSize: 50,
+      },
+      schedule: { cron: "0 9 * * 1-6" },
+      baseline: { minProducts: 100, maxErrorRate: 0.5 },
+    },
   ],
 };
 
@@ -112,3 +142,4 @@ export function getMarketConfig(slug: string): MarketRegistryEntry | undefined {
 export function getEnabledSlugs(): string[] {
   return getEnabledMarkets().map((m) => m.slug);
 }
+

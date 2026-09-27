@@ -4,7 +4,7 @@
  * Permite adicionar novos mercados sem alterar o runner/orchestrator.
  */
 
-import type { ScrapeResult, UrlOutcome, RunStats } from "./types.js";
+import type { UrlOutcome, RunStats } from "./types.js";
 
 // Re-export types for consumers
 export type { UrlOutcome, RunStats, ScrapeResult } from "./types.js";
@@ -76,7 +76,7 @@ export interface NormalizedProduct {
   /** URL de origem (página do produto/encarte) */
   sourceUrl: string | null;
   /** Fonte do preço */
-  source: "site-jsonld" | "graphql" | "manual" | "encarte";
+  source: "site-jsonld" | "catalog-api" | "graphql" | "manual" | "encarte";
   /** Timestamp da coleta (ISO 8601 com offset) */
   collectedAt: string;
   /** Slug do mercado de origem */
@@ -100,7 +100,7 @@ export interface RawProduct {
   promotionalPrice?: number | null;
   imageUrl?: string | null;
   sourceUrl: string;
-  source: "site-jsonld" | "graphql" | "manual" | "encarte";
+  source: "site-jsonld" | "catalog-api" | "graphql" | "manual" | "encarte";
   collectedAt: string;
   marketSlug: string;
   /** Dados extras específicos do provider */
@@ -182,3 +182,4 @@ export interface MarketRegistryEntry {
 export interface MarketsConfig {
   markets: MarketRegistryEntry[];
 }
+

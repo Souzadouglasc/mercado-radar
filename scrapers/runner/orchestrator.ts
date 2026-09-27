@@ -7,8 +7,9 @@
 import { providerRegistry, initializeRegistry } from "../registry/index.js";
 import { ProductCatalog } from "../core/catalog.js";
 import { IngestClient, type IngestItem } from "../core/ingest-client.js";
-import type { MarketProvider, CollectOptions, CollectResult, NormalizedProduct } from "../core/provider.js";
+import type { CollectOptions, CollectResult } from "../core/provider.js";
 import { getEnabledMarkets, getMarketConfig } from "../config/markets.config.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface OrchestratorOptions {
   /** Slugs dos mercados para processar (vazio = todos habilitados) */
@@ -48,7 +49,7 @@ export class Orchestrator {
   private logs: string[] = [];
 
   constructor(
-    private supabase: any, // SupabaseClient
+    private supabase: SupabaseClient,
     options: OrchestratorOptions = {}
   ) {
     this.catalog = new ProductCatalog(supabase);
@@ -118,6 +119,7 @@ export class Orchestrator {
     try {
       collectResult = await provider.collect(collectOptions);
     } catch (err) {
+      await this.completeActions(collectOptions.actionIds, "failed", `Coleta falhou: ${err instanceof Error ? err.message : String(err)}`);
       return {
         marketSlug,
         collectResult: { items: [], outcomes: [], stats: { marketSlug, productsFound: 0, ok: 0, errors: 0, errorRate: 1, durationMs: 0 }, startedAt: "", finishedAt: "" },
@@ -128,24 +130,6 @@ export class Orchestrator {
     }
 
     this.log(`[${marketSlug}] Coleta finalizada: ${collectResult.items.length} produtos, ${collectResult.stats.errors} erros (${(collectResult.stats.errorRate * 100).toFixed(1)}%)`);
-
-    // Complete scrape_actions se dynamic matrix
-    if (!this.options.dryRun && collectOptions.actionIds && collectOptions.actionIds.length > 0) {
-      for (const actionId of collectOptions.actionIds) {
-        if (actionId) {
-          try {
-            await this.supabase.rpc("complete_scrape_action", {
-              p_action_id: actionId,
-              p_status: "done",
-              p_error_summary: null,
-            });
-            this.log(`[${marketSlug}] Action ${actionId} marcada como done`);
-          } catch (err) {
-            this.log(`[${marketSlug}] Erro ao completar action ${actionId}: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }
-      }
-    }
 
     // Quality gates (apenas para providers com baseline)
     const belowBaseline = collectResult.items.length < 0.3 * Math.min(baseline.minProducts, collectOptions.limit);
@@ -160,7 +144,9 @@ export class Orchestrator {
     const matchedProducts: OrchestratorResult["matchedProducts"] = [];
     const ingestItems: IngestItem[] = [];
 
-    for (const normalized of collectResult.items) {
+    const pricedItems = collectResult.items.filter((item) => Number.isFinite(item.price) && item.price > 0);
+    const invalidPriceCount = collectResult.items.length - pricedItems.length;
+    for (const normalized of pricedItems) {
       try {
         const ref = await this.catalog.matchOrCreate({
           canonicalName: normalized.canonicalName,
@@ -217,13 +203,50 @@ export class Orchestrator {
       this.log(`[${marketSlug}] DRY_RUN — ingest não executado`);
     }
 
+    const collectErrors = collectResult.outcomes.filter((outcome) => !outcome.ok).length + invalidPriceCount;
+    const ingestFailed = ingestResult?.status === "FAILED";
+    const noPricedProducts = pricedItems.length === 0 || (ingestResult?.valid ?? 0) === 0;
+    const success = !ingestFailed && !noPricedProducts;
+    const actionSummary = [
+      collectErrors > 0 ? `${collectErrors} URL(s) sem coleta válida` : null,
+      ingestFailed ? "Ingestão de preços falhou" : null,
+      noPricedProducts ? "Nenhum produto com preço válido foi gravado" : null,
+      this.options.dryRun ? "Dry-run: dados não foram gravados" : null,
+    ].filter(Boolean).join("; ");
+
+    await this.completeActions(
+      collectOptions.actionIds,
+      success && !this.options.dryRun ? "done" : "failed",
+      actionSummary || null,
+    );
+
     return {
       marketSlug,
       collectResult,
       ingestResult,
       matchedProducts,
-      success: true,
+      success,
+      error: success ? undefined : actionSummary || "Coleta sem preços gravados",
     };
+  }
+
+  private async completeActions(actionIds: string[] | undefined, status: "done" | "failed", errorSummary: string | null): Promise<void> {
+    if (this.options.dryRun || !actionIds?.length) return;
+
+    for (const actionId of actionIds) {
+      if (!actionId) continue;
+      try {
+        const { error } = await this.supabase.rpc("complete_scrape_action", {
+          p_action_id: actionId,
+          p_status: status,
+          p_error_summary: errorSummary,
+        });
+        if (error) throw error;
+        this.log(`[action] ${actionId} marcada como ${status}${errorSummary ? `: ${errorSummary}` : ""}`);
+      } catch (err) {
+        this.log(`[action] Erro ao completar ${actionId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   /** Executa pipeline para todos os mercados configurados */
@@ -270,3 +293,4 @@ export async function createOrchestrator(options: OrchestratorOptions = {}): Pro
   const supabase = createServiceRoleClient();
   return new Orchestrator(supabase, options);
 }
+

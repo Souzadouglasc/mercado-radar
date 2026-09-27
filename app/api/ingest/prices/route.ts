@@ -28,6 +28,7 @@ function slugify(value: string): string {
 
 const SOURCE_IDS: Record<ProductPrice["source"], number> = {
   "site-jsonld": 1,
+  "catalog-api": 5,
   graphql: 2,
   manual: 3,
   encarte: 4,
@@ -207,3 +208,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, run_id: runId, valid, ignored, created, status });
 }
+
