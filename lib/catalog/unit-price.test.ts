@@ -144,7 +144,7 @@ describe("pricePerUnit", () => {
   test("preço inválido -> null", () => {
     assert.strictEqual(pricePerUnit(0, 500, "g"), null);
     assert.strictEqual(pricePerUnit(-10, 500, "g"), null);
-    assert.strictEqual(pricePerUnit(null as any, 500, "g"), null);
+    assert.strictEqual(pricePerUnit(null, 500, "g"), null);
   });
 
   test("quantidade/unidade inválida -> null", () => {
