@@ -50,4 +50,3 @@ export function toRunStats(result: ScrapeResult): RunStats {
     durationMs: Date.parse(result.finishedAt) - Date.parse(result.startedAt),
   };
 }
-
