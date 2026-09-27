@@ -417,4 +417,3 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     };
   }
 }
-
