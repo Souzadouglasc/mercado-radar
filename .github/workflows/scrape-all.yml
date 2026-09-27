@@ -156,9 +156,10 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SWEEP_MODE: ${{ github.event.schedule == '0 8 * * 0' && 'full' || 'incremental' }}
         run: |
           args=(--market "${{ matrix.market }}" --limit 2000 --skip "$(( ($(date -u +%s) / 86400) * 2000 ))" --concurrency 6)
-          if [[ "${GITHUB_EVENT_SCHEDULE:-}" == "0 8 * * 0" ]]; then
+          if [[ "$SWEEP_MODE" == "full" ]]; then
             args+=(--full)
           else
             args+=(--incremental)
