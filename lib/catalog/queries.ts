@@ -11,6 +11,13 @@ export type Market = {
 
 export type CityFilter = string | null; // null = todas
 
+function cityValues(city: CityFilter): string[] | null {
+  if (!city) return null;
+  if (city === "sao-jose") return ["São José", "São José (atendida por Palhoça)"];
+  if (city === "florianopolis") return ["Florianópolis"];
+  return [city];
+}
+
 export type LatestPrice = {
   product_id: string;
   market_id: string;
@@ -90,8 +97,9 @@ export async function latestPricesBatch(
     .order("collected_at", { ascending: false })
     .limit(Math.min(500, productIds.length * 20));
 
-  if (city) {
-    query = query.eq("markets.city", city);
+  const cities = cityValues(city);
+  if (cities) {
+    query = query.in("markets.city", cities);
   }
 
   const { data: rows } = await query;
@@ -159,12 +167,14 @@ export async function searchProducts(
       .or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
       .order("name")
       .limit(limit);
-    if (city) {
-      // Join com markets via prices para filtrar por cidade
+    const cities = cityValues(city);
+    if (cities) {
+      // Join com markets via prices para filtrar pela região selecionada.
+      const citySql = cities.map((value) => `'${value.replace(/'/g, "''")}'`).join(",");
       query = query.filter("id", "in", `(
         select distinct product_id from prices p
         join markets m on m.id = p.market_id
-        where m.city = '${city.replace(/'/g, "''")}' and m.active
+        where m.city in (${citySql}) and m.active
       )`);
     }
     const { data: products, error } = await query;
