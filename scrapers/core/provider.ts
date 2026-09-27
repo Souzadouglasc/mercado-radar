@@ -4,7 +4,7 @@
  * Permite adicionar novos mercados sem alterar o runner/orchestrator.
  */
 
-import type { ScrapeResult, UrlOutcome, RunStats } from "./types.js";
+import type { UrlOutcome, RunStats } from "./types.js";
 
 // Re-export types for consumers
 export type { UrlOutcome, RunStats, ScrapeResult } from "./types.js";

@@ -110,7 +110,7 @@ jobs:
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
           --limit "${{ inputs.limit || '500' }}"
           --incremental
-          --skip $(( $(date +%u) * 500 % 2000 ))
+          --skip $(( ($(date -u +%s) / 86400) * 500 ))
           --concurrency 4
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
       - name: Scrape ${{ matrix.market }} (full, domingo)
@@ -122,6 +122,7 @@ jobs:
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
           --limit "${{ inputs.limit || '500' }}"
           --full
+          --skip $(( ($(date -u +%s) / 86400) * 500 ))
           --concurrency 4
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
 

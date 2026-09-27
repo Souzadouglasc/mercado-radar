@@ -63,6 +63,30 @@ interface VtexProduct {
   items?: VtexItem[];
 }
 
+interface VtexCategory {
+  id?: number | string;
+  children?: VtexCategory[];
+}
+
+interface CatalogRange { url: string }
+
+function categoryIds(tree: VtexCategory[]): string[] {
+  const ids: string[] = [];
+  const pending = [...tree];
+  const seen = new Set<string>();
+  while (pending.length) {
+    const category = pending.shift();
+    if (!category || category.id == null) continue;
+    const id = String(category.id);
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+    pending.push(...(category.children ?? []));
+  }
+  return ids;
+}
+
 function finitePrice(...values: Array<number | string | undefined>): number | null {
   for (const value of values) {
     const parsed = typeof value === "number" ? value : parsePrice(value);
@@ -166,19 +190,43 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
 
     // A API pública de catálogo VTEX limita a janela de busca em 2.500 resultados.
     // O offset rotativo permite cobrir o catálogo por partes sem repetir sempre a primeira página.
-    const startOffset = Math.max(0, Math.floor(options.skip ?? 0)) % MAX_CATALOG_RESULTS;
     const count = Math.min(limit, MAX_CATALOG_RESULTS);
-    const ranges: Array<{ from: number; to: number; url: string }> = [];
-    let collectedSlots = 0;
-    while (collectedSlots < count) {
-      const from = (startOffset + collectedSlots) % MAX_CATALOG_RESULTS;
-      const pageCount = Math.min(pageSize, count - collectedSlots, MAX_CATALOG_RESULTS - from);
+    const categoriesUrl = new URL("/api/catalog_system/pub/category/tree/3", this.config.siteUrl).toString();
+    let categories: string[] = [];
+    let categoryError: string | undefined;
+    try {
+      const tree = await this.fetchJson<unknown>(categoriesUrl, retries);
+      if (Array.isArray(tree)) categories = categoryIds(tree as VtexCategory[]);
+      else categoryError = "vtex_category_tree_response_not_array";
+    } catch (error) {
+      categoryError = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
+    }
+
+    // Cada busca VTEX pode paginar até 2.500 itens. Percorremos todas as
+    // categorias (inclusive pais) e espalhamos os offsets entre elas para
+    // cobrir catálogos extensos sem insistir sempre no primeiro lote.
+    const maxPagesPerCategory = Math.ceil(MAX_CATALOG_RESULTS / pageSize);
+    const pageDescriptors: Array<{ categoryId?: string; page: number }> = [];
+    if (categories.length) {
+      for (let page = 0; page < maxPagesPerCategory; page++) {
+        for (const categoryId of categories) pageDescriptors.push({ categoryId, page });
+      }
+    } else {
+      for (let page = 0; page < maxPagesPerCategory; page++) pageDescriptors.push({ page });
+    }
+    const startPage = Math.floor(Math.max(0, options.skip ?? 0) / pageSize) % pageDescriptors.length;
+    const pagesToFetch = Math.ceil(count / pageSize);
+    const ranges: CatalogRange[] = [];
+    for (let i = 0; i < pagesToFetch; i++) {
+      const descriptor = pageDescriptors[(startPage + i) % pageDescriptors.length];
+      const from = descriptor.page * pageSize;
+      const to = Math.min(from + pageSize - 1, MAX_CATALOG_RESULTS - 1);
       const url = new URL(this.config.catalogApiUrl);
       url.searchParams.set("_from", String(from));
-      url.searchParams.set("_to", String(from + pageCount - 1));
+      url.searchParams.set("_to", String(to));
+      if (descriptor.categoryId) url.searchParams.set("fq", `C:/${descriptor.categoryId}/`);
       if (this.config.salesChannel) url.searchParams.set("sc", this.config.salesChannel);
-      ranges.push({ from, to: from + pageCount - 1, url: url.toString() });
-      collectedSlots += pageCount;
+      ranges.push({ url: url.toString() });
     }
 
     const pageErrors: Array<string | undefined> = new Array(ranges.length);
@@ -198,7 +246,9 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
     );
 
     const items: NormalizedProduct[] = [];
-    const outcomes: UrlOutcome[] = [];
+    const outcomes: UrlOutcome[] = categoryError
+      ? [{ url: categoriesUrl, ok: false, error: `category_tree_unavailable: ${categoryError}` }]
+      : [{ url: categoriesUrl, ok: true }];
     for (let i = 0; i < ranges.length; i++) {
       const range = ranges[i];
       const products = pages[i] ?? [];
@@ -214,7 +264,9 @@ export class VtexProvider extends BaseHttpProvider<VtexProviderConfig> {
         ? { url: range.url, ok: false, error }
         : rawItems.length
           ? { url: range.url, ok: true }
-          : { url: range.url, ok: false, error: products.length ? "no_available_price_in_vtex_page" : "empty_vtex_catalog_page" });
+          : products.length
+            ? { url: range.url, ok: false, error: "no_available_price_in_vtex_page" }
+            : { url: range.url, ok: true });
     }
 
     const finishedAt = finishedNow();
