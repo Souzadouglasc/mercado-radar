@@ -11,6 +11,24 @@ import type { CollectOptions, CollectResult } from "../core/provider.js";
 import { getEnabledMarkets, getMarketConfig } from "../config/markets.config.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const CATALOG_CONCURRENCY = 6;
+
+async function forEachConcurrent<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const item = items[nextIndex++];
+        if (item !== undefined) await worker(item);
+      }
+    }),
+  );
+}
+
 export interface OrchestratorOptions {
   /** Slugs dos mercados para processar (vazio = todos habilitados) */
   markets?: string[];
@@ -149,7 +167,7 @@ export class Orchestrator {
     if (this.options.dryRun) {
       this.log(`[${marketSlug}] DRY_RUN seguro: ${pricedItems.length} produtos com preço válido; nenhuma escrita no Supabase.`);
     } else {
-      for (const normalized of pricedItems) {
+      await forEachConcurrent(pricedItems, CATALOG_CONCURRENCY, async (normalized) => {
         try {
           const ref = await this.catalog.matchOrCreate({
             canonicalName: normalized.canonicalName,
@@ -179,7 +197,7 @@ export class Orchestrator {
         } catch (err) {
           this.log(`[${marketSlug}] Erro no catalog para "${normalized.rawName}": ${err instanceof Error ? err.message : String(err)}`);
         }
-      }
+      });
     }
 
     this.log(`[${marketSlug}] Catalog: ${matchedProducts.filter(m => m.isNew).length} novos, ${matchedProducts.filter(m => !m.isNew).length} existentes`);

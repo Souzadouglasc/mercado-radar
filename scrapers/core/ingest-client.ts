@@ -10,6 +10,24 @@ const SOURCE_IDS: Record<NormalizedProduct["source"], number> = {
   encarte: 4,
 };
 
+const INGEST_CONCURRENCY = 6;
+
+async function forEachConcurrent<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const item = items[nextIndex++];
+        if (item !== undefined) await worker(item);
+      }
+    }),
+  );
+}
+
 export interface IngestItem {
   product_name: string;
   brand: string | null;
@@ -93,12 +111,12 @@ export class IngestClient {
     let created = 0;
     const errors: { product_url?: string; error_type: string; message: string }[] = [];
 
-    for (const item of items) {
+    await forEachConcurrent(items, INGEST_CONCURRENCY, async (item) => {
       const marketId = marketBySlug.get(item.market_slug);
       if (!marketId) {
         ignored++;
         errors.push({ error_type: "market_not_found", message: `Mercado desconhecido: ${item.market_slug}` });
-        continue;
+        return;
       }
 
       const canonicalProductId = item.canonical_product_id;
@@ -151,16 +169,50 @@ export class IngestClient {
             error_type: "product_upsert_failed",
             message: insertError?.message ?? "Falha ao criar produto market-specific",
           });
-          continue;
+          return;
         }
         productId = (inserted as ProductRow).id;
         created++;
-        
-        // Registra alias
-        await this.supabase.from("product_aliases").upsert(
-          { product_id: canonicalProductId, market_id: marketId, raw_name: item.product_name, market_sku: item.barcode },
-          { onConflict: "product_id,market_id,raw_name" },
-        );
+      }
+
+      // product_id aponta para o produto desta loja; canonical_id aponta para
+      // o catálogo compartilhado. Manter os dois vínculos evita misturar IDs.
+      const aliasValues = {
+        product_id: productId,
+        canonical_id: canonicalProductId,
+        market_id: marketId,
+        raw_name: item.product_name,
+        market_sku: item.barcode,
+      };
+      const { error: aliasError } = await this.supabase
+        .from("product_aliases")
+        .upsert(aliasValues, { onConflict: "product_id,market_id,raw_name" });
+      if (aliasError) {
+        let finalAliasError: typeof aliasError | null = aliasError;
+        if (item.barcode) {
+          const { data: existingAlias } = await this.supabase
+            .from("product_aliases")
+            .select("id")
+            .eq("canonical_id", canonicalProductId)
+            .eq("market_id", marketId)
+            .eq("market_sku", item.barcode)
+            .maybeSingle();
+          if (existingAlias) {
+            const { error: updateError } = await this.supabase
+              .from("product_aliases")
+              .update(aliasValues)
+              .eq("id", existingAlias.id);
+            if (!updateError) finalAliasError = null;
+            else finalAliasError = updateError;
+          }
+        }
+        if (finalAliasError) {
+          errors.push({
+            product_url: item.source_url ?? undefined,
+            error_type: "product_alias_upsert_failed",
+            message: finalAliasError.message,
+          });
+        }
       }
 
       // Insere preço (pula se price <= 0 — encartes sem preço definido)
@@ -181,14 +233,14 @@ export class IngestClient {
             error_type: "price_insert_failed",
             message: priceError.message,
           });
-          continue;
+          return;
         }
       }
 
       valid++;
-    }
+    });
 
-    const status = valid === 0 ? "FAILED" : ignored === 0 ? "SUCCESS" : "PARTIAL";
+    const status = valid === 0 ? "FAILED" : ignored === 0 && errors.length === 0 ? "SUCCESS" : "PARTIAL";
     await this.supabase
       .from("scrape_runs")
       .update({

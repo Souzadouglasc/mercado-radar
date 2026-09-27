@@ -41,13 +41,28 @@ O catálogo público VTEX limita cada consulta a 2.500 resultados. Para cobrir
 catálogos maiores, o provider percorre as categorias e avança o offset entre
 execuções diárias; o preço observado segue a loja padrão pública de cada site.
 
-Na verificação local de 2026-09-27, a coleta de 25 itens por fonte retornou e
-gravou 95 preços: Fort 20/25 páginas, Koch 25/25, Bistek 25 e Angeloni 25.
-Fort teve cinco páginas sem produto/preço no HTML da loja selecionada. Um
-dry-run separado coletou 200 itens válidos em cada catálogo VTEX. Brasil
-Atacadista e Komprão retornaram zero itens: as páginas públicas apontam para
-encartes, sem preços estruturados. O banco ficou com 1.728 preços no total,
-incluindo 20 de Fort, 25 de Koch, 25 de Bistek e 25 de Angeloni coletados hoje.
+## Execução diária
+
+O workflow `scrape-all.yml` mantém agendamentos diários às 06:00 BRT (seg–sáb)
+e às 05:00 BRT no domingo. Cada mercado recebe uma varredura independente,
+com limite de até 2.000 produtos por execução e concorrência controlada em 6.
+O `--skip` avança em blocos de 2.000 para percorrer sitemaps e catálogos maiores
+ao longo dos dias; o domingo faz uma varredura completa do segmento selecionado.
+Para os catálogos VTEX, uma consulta individual ainda tem limite de 2.500 itens
+por categoria. O limite diário não garante, sozinho, que sites maiores sejam
+completamente cobertos em um único dia.
+
+O pipeline resolve o catálogo e grava preços com até seis itens em paralelo,
+mantendo concorrência máxima de seis no processamento HTTP e na ingestão. A
+concorrência é limitada para reduzir o tempo sem disparar milhares de conexões
+simultâneas aos mercados ou ao Supabase.
+
+Na coleta real de 2026-09-27 foram gravados 2.052 preços do dia: Fort 477,
+Koch 525, Bistek 525 e Angeloni 525. O total histórico passou a 3.685 preços.
+O dry-run de 200 itens nos dois catálogos VTEX retornou 200 itens válidos em
+cada um. Fort teve páginas sem preço estruturado; elas foram ignoradas em vez
+de receber um preço inventado. Brasil Atacadista e Komprão retornaram zero
+preços de produto nessa verificação.
 
 Para cobrir os dois mercados que publicam ofertas em encartes, falta OCR com
 validação de produto, preço, unidade e validade da oferta, ou acesso a uma API

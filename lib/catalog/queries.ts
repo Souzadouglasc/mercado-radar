@@ -572,7 +572,43 @@ export async function getProductsByCategory(
     image_url: string | null;
   }[];
 
-  const batch = await latestPricesBatch(supabase, rows.map((p) => p.id), city);
+  // prices.product_id aponta para products.id (produto específico da loja),
+  // enquanto esta listagem usa canonical_products.id. Resolve os vínculos antes
+  // de buscar os preços para não renderizar os cards com nomes sem comparação.
+  const { data: marketProducts, error: marketProductsError } = await supabase
+    .from("products")
+    .select("id, normalized_id")
+    .in("normalized_id", rows.map((p) => p.id))
+    .eq("active", true);
+
+  if (marketProductsError) return [];
+
+  const marketProductRows = (marketProducts ?? []) as {
+    id: string;
+    normalized_id: string;
+  }[];
+  const marketProductToCanonical = new Map(
+    marketProductRows.map((product) => [product.id, product.normalized_id]),
+  );
+  const marketBatch = await latestPricesBatch(
+    supabase,
+    marketProductRows.map((p) => p.id),
+    city,
+  );
+  const batch = new Map<string, LatestPrice[]>();
+  for (const marketProduct of marketProductRows) {
+    const canonicalId = marketProductToCanonical.get(marketProduct.id);
+    if (!canonicalId) continue;
+    const canonicalPrices = batch.get(canonicalId) ?? [];
+    const newestByMarket = new Map(canonicalPrices.map((price) => [price.market_id, price]));
+    for (const price of marketBatch.get(marketProduct.id) ?? []) {
+      const current = newestByMarket.get(price.market_id);
+      if (!current || price.collected_at > current.collected_at) {
+        newestByMarket.set(price.market_id, price);
+      }
+    }
+    batch.set(canonicalId, [...newestByMarket.values()]);
+  }
 
   // Importa a função de preço por unidade
   const { pricePerUnitFromProduct } = await import("./unit-price");
@@ -645,3 +681,4 @@ export async function latestPricesForCanonicalProducts(
 ): Promise<Map<string, LatestPrice[]>> {
   return latestPricesBatch(supabase, canonicalIds, city);
 }
+

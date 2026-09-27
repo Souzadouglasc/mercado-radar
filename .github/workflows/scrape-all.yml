@@ -10,7 +10,7 @@ on:
     inputs:
       limit:
         description: "Max de produtos por mercado"
-        default: "200"
+        default: "2000"
       dry_run:
         description: "Coleta sem enviar (true/false)"
         default: "false"
@@ -60,6 +60,9 @@ jobs:
     if: needs.dispatch.outputs.hasWork == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: scrape-${{ matrix.market_slug }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.dispatch.outputs.matrix) }}
@@ -88,9 +91,12 @@ jobs:
   scrape-fallback:
     name: Scrape Fallback (Traditional)
     needs: dispatch
-    if: needs.dispatch.outputs.hasWork == 'false'
+    if: needs.dispatch.outputs.hasWork == 'false' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: scrape-${{ matrix.market }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -109,9 +115,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
-          --limit "${{ inputs.limit || '500' }}"
+          --limit "${{ inputs.limit || '2000' }}"
           --incremental
-          --skip $(( ($(date -u +%s) / 86400) * 500 ))
+          --skip $(( ($(date -u +%s) / 86400) * 2000 ))
           --concurrency 4
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
       - name: Scrape ${{ matrix.market }} (full, domingo)
@@ -121,9 +127,41 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
-          --limit "${{ inputs.limit || '500' }}"
+          --limit "${{ inputs.limit || '2000' }}"
           --full
-          --skip $(( ($(date -u +%s) / 86400) * 500 ))
+          --skip $(( ($(date -u +%s) / 86400) * 2000 ))
           --concurrency 4
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+  scheduled-sweep:
+    name: Daily Catalog Sweep
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [fort, koch, brasil, komprao, bistek, angeloni]
+    concurrency:
+      group: scrape-${{ matrix.market }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Scrape ${{ matrix.market }} catalog segment
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          args=(--market "${{ matrix.market }}" --limit 2000 --skip "$(( ($(date -u +%s) / 86400) * 2000 ))" --concurrency 6)
+          if [[ "${GITHUB_EVENT_SCHEDULE:-}" == "0 8 * * 0" ]]; then
+            args+=(--full)
+          else
+            args+=(--incremental)
+          fi
+          npx tsx scrapers/runner/run.ts "${args[@]}"
 
