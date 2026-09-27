@@ -146,35 +146,39 @@ export class Orchestrator {
 
     const pricedItems = collectResult.items.filter((item) => Number.isFinite(item.price) && item.price > 0);
     const invalidPriceCount = collectResult.items.length - pricedItems.length;
-    for (const normalized of pricedItems) {
-      try {
-        const ref = await this.catalog.matchOrCreate({
-          canonicalName: normalized.canonicalName,
-          brand: normalized.brand,
-          barcode: normalized.barcode,
-          marketSku: normalized.marketSku,
-          quantity: normalized.quantity,
-          unit: normalized.unit,
-          normalizedQuantity: normalized.normalizedQuantity,
-          normalizedUnit: normalized.normalizedUnit,
-          imageUrl: normalized.imageUrl,
-          categoryHint: normalized.categoryHint,
-          marketSlug: normalized.marketSlug,
-          rawName: normalized.rawName,
-          collectedAt: normalized.collectedAt,
-        });
+    if (this.options.dryRun) {
+      this.log(`[${marketSlug}] DRY_RUN seguro: ${pricedItems.length} produtos com preço válido; nenhuma escrita no Supabase.`);
+    } else {
+      for (const normalized of pricedItems) {
+        try {
+          const ref = await this.catalog.matchOrCreate({
+            canonicalName: normalized.canonicalName,
+            brand: normalized.brand,
+            barcode: normalized.barcode,
+            marketSku: normalized.marketSku,
+            quantity: normalized.quantity,
+            unit: normalized.unit,
+            normalizedQuantity: normalized.normalizedQuantity,
+            normalizedUnit: normalized.normalizedUnit,
+            imageUrl: normalized.imageUrl,
+            categoryHint: normalized.categoryHint,
+            marketSlug: normalized.marketSlug,
+            rawName: normalized.rawName,
+            collectedAt: normalized.collectedAt,
+          });
 
-        matchedProducts.push({
-          productId: ref.productId,
-          rawName: normalized.rawName,
-          matchedBy: ref.matchedBy,
-          isNew: ref.isNew,
-        });
+          matchedProducts.push({
+            productId: ref.productId,
+            rawName: normalized.rawName,
+            matchedBy: ref.matchedBy,
+            isNew: ref.isNew,
+          });
 
-        // Prepara item para ingest (usa nome original para alias matching + canonical_product_id)
-        ingestItems.push(IngestClient.toIngestItem(normalized, ref.productId));
-      } catch (err) {
-        this.log(`[${marketSlug}] Erro no catalog para "${normalized.rawName}": ${err instanceof Error ? err.message : String(err)}`);
+          // Prepara item para ingest (usa nome original para alias matching + canonical_product_id)
+          ingestItems.push(IngestClient.toIngestItem(normalized, ref.productId));
+        } catch (err) {
+          this.log(`[${marketSlug}] Erro no catalog para "${normalized.rawName}": ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
 
@@ -199,13 +203,19 @@ export class Orchestrator {
         ingestResult = { valid: 0, ignored: ingestItems.length, created: 0, status: "FAILED", runId: "" };
       }
     } else {
-      ingestResult = { valid: 0, ignored: 0, created: 0, status: "DRY_RUN", runId: "" };
+      ingestResult = {
+        valid: this.options.dryRun ? pricedItems.length : 0,
+        ignored: this.options.dryRun ? collectResult.items.length - pricedItems.length : 0,
+        created: 0,
+        status: "DRY_RUN",
+        runId: "",
+      };
       this.log(`[${marketSlug}] DRY_RUN — ingest não executado`);
     }
 
     const collectErrors = collectResult.outcomes.filter((outcome) => !outcome.ok).length + invalidPriceCount;
     const ingestFailed = ingestResult?.status === "FAILED";
-    const noPricedProducts = pricedItems.length === 0 || (ingestResult?.valid ?? 0) === 0;
+    const noPricedProducts = pricedItems.length === 0 || (!this.options.dryRun && (ingestResult?.valid ?? 0) === 0);
     const success = !ingestFailed && !noPricedProducts;
     const actionSummary = [
       collectErrors > 0 ? `${collectErrors} URL(s) sem coleta válida` : null,

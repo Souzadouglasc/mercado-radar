@@ -20,8 +20,8 @@ npx tsx scrapers/runner/run.ts --market brasil --limit 50 --dry-run
 npx tsx scrapers/runner/run.ts --market komprao --limit 50 --dry-run
 ```
 
-`--market` aceita `fort`, `koch`, `brasil` ou `komprao`. `--limit` aceita
-1–2000 (default 200); `--concurrency` aceita 1–8 (default 4). Use
+`--market` aceita `fort`, `koch`, `brasil`, `komprao`, `bistek` ou `angeloni`.
+`--limit` aceita 1–2000 (default 200); `--concurrency` aceita 1–8 (default 4). Use
 `--incremental` e `--skip N` para percorrer sitemaps sem `lastmod`, ou
 `--full` para ignorar o filtro incremental. Execuções reais precisam de
 `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente.
@@ -41,12 +41,18 @@ O catálogo público VTEX limita cada consulta a 2.500 resultados. Para cobrir
 catálogos maiores, o provider percorre as categorias e avança o offset entre
 execuções diárias; o preço observado segue a loja padrão pública de cada site.
 
-Na consulta de 2026-09-27, o banco tinha 1.633 preços recentes, todos de Fort
-e Koch; não havia coleta automática pública de preços de Brasil Atacadista nem
-Komprão nos últimos sete dias (há um registro manual do Brasil). As ofertas
-publicadas apenas em encarte exigem OCR com validação de
-produto/valor, ou uma API oficial de catálogo/preços, para completar essa
-cobertura. O scraper não deve inferir esses valores.
+Na verificação local de 2026-09-27, a coleta de 25 itens por fonte retornou e
+gravou 95 preços: Fort 20/25 páginas, Koch 25/25, Bistek 25 e Angeloni 25.
+Fort teve cinco páginas sem produto/preço no HTML da loja selecionada. Um
+dry-run separado coletou 200 itens válidos em cada catálogo VTEX. Brasil
+Atacadista e Komprão retornaram zero itens: as páginas públicas apontam para
+encartes, sem preços estruturados. O banco ficou com 1.728 preços no total,
+incluindo 20 de Fort, 25 de Koch, 25 de Bistek e 25 de Angeloni coletados hoje.
+
+Para cobrir os dois mercados que publicam ofertas em encartes, falta OCR com
+validação de produto, preço, unidade e validade da oferta, ou acesso a uma API
+oficial de catálogo/preços. O scraper não deve inferir valores de imagens sem
+essa validação.
 
 ## Fila e observabilidade
 

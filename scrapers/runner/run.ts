@@ -8,11 +8,8 @@
 
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { createServiceRoleClient } from "../lib/supabase.js";
-import { createOrchestrator, type OrchestratorOptions } from "./orchestrator.js";
+import { createOrchestrator } from "./orchestrator.js";
 import { getEnabledSlugs, getMarketConfig } from "../config/markets.config.js";
-
-const BASELINE_PRODUCTS_FOUND = 200;
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -79,7 +76,6 @@ async function main() {
   );
 
   // Cria orchestrator
-  const supabase = createServiceRoleClient();
   const orchestrator = await createOrchestrator({
     markets: targetMarkets,
     collectOptions: {
@@ -104,10 +100,16 @@ async function main() {
   let hasQualityWarning = false;
 
   for (const result of results) {
+    const failedOutcomes = result.collectResult.outcomes.filter((outcome) => !outcome.ok);
+    console.log(JSON.stringify({
+      market: result.marketSlug,
+      collection: result.collectResult.stats,
+      outcomeErrors: failedOutcomes.slice(0, 10),
+    }));
+
     if (!result.success) {
       console.error(`[run] ${result.marketSlug} FALHOU: ${result.error}`);
       hasFailure = true;
-      continue;
     }
 
     const marketConfig = getMarketConfig(result.marketSlug);
@@ -115,26 +117,18 @@ async function main() {
 
     // Quality gates (apenas para providers com baseline significativa)
     const belowBaseline = result.collectResult.items.length < 0.3 * Math.min(baseline.minProducts, limit);
-    if (belowBaseline && baseline.minProducts > 10) {
+    if (result.success && belowBaseline && baseline.minProducts > 10) {
       console.error(
         `[run] ${result.marketSlug} QUALITY WARNING: products_found=${result.collectResult.items.length} < 30% da baseline (${Math.min(baseline.minProducts, limit)}).`
       );
       hasQualityWarning = true;
     }
-    if (result.collectResult.stats.errorRate > baseline.maxErrorRate) {
+    if (result.success && result.collectResult.stats.errorRate > baseline.maxErrorRate) {
       console.error(
         `[run] ${result.marketSlug} QUALITY WARNING: taxa de erro=${(result.collectResult.stats.errorRate * 100).toFixed(1)}% > ${(baseline.maxErrorRate * 100).toFixed(0)}%.`
       );
       hasQualityWarning = true;
     }
-
-    // Log compatível com formato antigo
-    console.log(
-      JSON.stringify({
-        ...result.collectResult.stats,
-        errors: result.collectResult.outcomes.filter((o) => !o.ok).slice(0, 10),
-      }),
-    );
 
     if (result.ingestResult) {
       console.log(
@@ -168,3 +162,4 @@ main().catch((err) => {
   console.error("[run] erro fatal:", err instanceof Error ? err.message : err);
   process.exit(1);
 });
+
