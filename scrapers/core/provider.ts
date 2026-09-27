@@ -182,4 +182,3 @@ export interface MarketRegistryEntry {
 export interface MarketsConfig {
   markets: MarketRegistryEntry[];
 }
-
