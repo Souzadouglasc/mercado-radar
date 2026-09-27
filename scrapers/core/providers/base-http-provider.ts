@@ -360,4 +360,3 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
     };
   }
 }
-
