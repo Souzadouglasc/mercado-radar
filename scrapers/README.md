@@ -92,4 +92,3 @@ npm run lint
 ```
 
 `npm test` usa os testes em `scrapers/markets/` e `scrapers/core/normalize.test.ts`.
-
