@@ -40,13 +40,24 @@ async function Comparador() {
     );
   }
   const supabase = await createClient();
-  const { data: products } = await supabase
+  const { data: coverage, error: coverageError } = await supabase.rpc(
+    "top_canonical_products_by_market_coverage",
+    { p_limit: 6 },
+  );
+  const coveredIds = !coverageError && coverage
+    ? (coverage as { canonical_id: string; market_count: number }[]).map((row) => row.canonical_id)
+    : [];
+  let productQuery = supabase
     .from("canonical_products")
     .select("id, canonical_name, slug, brand, unit, quantity, image_url")
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(200);
-  const rows = ((products ?? []) as {
+    .eq("active", true);
+  if (coveredIds.length > 0) {
+    productQuery = productQuery.in("id", coveredIds);
+  } else {
+    productQuery = productQuery.order("created_at", { ascending: false }).limit(200);
+  }
+  const { data: products } = await productQuery;
+  const productsById = new Map(((products ?? []) as {
     id: string;
     canonical_name: string;
     slug: string;
@@ -54,7 +65,11 @@ async function Comparador() {
     unit: string | null;
     quantity: number | null;
     image_url: string | null;
-  }[]).map((p) => ({ ...p, name: p.canonical_name }));
+  }[]).map((product) => [product.id, product]));
+  const orderedProducts = coveredIds.length > 0
+    ? coveredIds.map((id) => productsById.get(id)).filter((product): product is NonNullable<typeof product> => Boolean(product))
+    : [...productsById.values()].sort((a, b) => b.canonical_name.localeCompare(a.canonical_name));
+  const rows = orderedProducts.map((p) => ({ ...p, name: p.canonical_name }));
   if (rows.length === 0) {
     return (
       <EmptyState
