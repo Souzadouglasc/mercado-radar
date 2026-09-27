@@ -142,4 +142,3 @@ export function getMarketConfig(slug: string): MarketRegistryEntry | undefined {
 export function getEnabledSlugs(): string[] {
   return getEnabledMarkets().map((m) => m.slug);
 }
-
