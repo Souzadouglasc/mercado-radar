@@ -21,4 +21,3 @@ export const ingestBodySchema = z.object({
 });
 
 export type ProductPrice = z.infer<typeof productPriceSchema>;
-
