@@ -29,4 +29,3 @@ where m.slug in ('bistek', 'angeloni')
     select 1 from scrape_actions a
     where a.market_slug = m.slug and a.status in ('pending', 'running')
   );
-
