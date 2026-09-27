@@ -78,4 +78,3 @@ export const providerRegistry = new ProviderRegistry();
 export function initializeRegistry(entries?: MarketRegistryEntry[]): void {
   providerRegistry.initialize(entries ?? getEnabledMarkets());
 }
-
