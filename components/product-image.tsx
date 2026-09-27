@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -301,6 +302,7 @@ export function ProductImage({
   sizes?: string;
   fill?: boolean;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const category = product ? inferCategory(product) : "default";
   const gradient = categoryGradient(category);
 
@@ -320,7 +322,7 @@ export function ProductImage({
 
   const finalSizes = sizes ?? defaultSizes;
 
-  if (image_url) {
+  if (image_url && !imageFailed) {
     return (
       <div
         className={cn(
@@ -336,6 +338,7 @@ export function ProductImage({
           fill={fill}
           sizes={finalSizes}
           priority={priority}
+          onError={() => setImageFailed(true)}
           placeholder="blur"
           blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect fill='%23e5e7eb' width='24' height='24'/%3E%3C/svg%3E"
           className="object-cover transition-opacity duration-300"
@@ -345,7 +348,7 @@ export function ProductImage({
     );
   }
 
-  // Placeholder ilustrado por categoria
+  // Placeholder ilustrado por categoria, também usado quando a imagem remota falha.
   return (
     <div
       className={cn(

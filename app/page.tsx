@@ -13,23 +13,11 @@ import { ProductImage } from "@/components/product-image";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getCachedDeals } from "@/lib/catalog/cached";
-import { latestPricesBatch, type DealRow } from "@/lib/catalog/queries";
+import { latestPricesBatch, type DealRow, type LatestPrice } from "@/lib/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Compare preços de supermercados",
   description: "MercadoRadar compara preços nos mercados Fort, Koch, Brasil e Komprão para você economizar.",
-};
-
-const PRODUCT_FIELDS = "id, name, slug, brand, unit, quantity, image_url";
-
-type CardProduct = {
-  id: string;
-  name: string;
-  slug: string;
-  brand: string | null;
-  unit: string | null;
-  quantity: number | null;
-  image_url: string | null;
 };
 
 // Chips de busca rápida para o hero
@@ -53,12 +41,20 @@ async function Comparador() {
   }
   const supabase = await createClient();
   const { data: products } = await supabase
-    .from("products")
-    .select(PRODUCT_FIELDS)
+    .from("canonical_products")
+    .select("id, canonical_name, slug, brand, unit, quantity, image_url")
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(6);
-  const rows = (products ?? []) as CardProduct[];
+  const rows = ((products ?? []) as {
+    id: string;
+    canonical_name: string;
+    slug: string;
+    brand: string | null;
+    unit: string | null;
+    quantity: number | null;
+    image_url: string | null;
+  }[]).map((p) => ({ ...p, name: p.canonical_name }));
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -67,13 +63,24 @@ async function Comparador() {
       />
     );
   }
-  // 1 round-trip (RPC latest_prices_for_products) — sem N+1.
-  const batch = await latestPricesBatch(
-    supabase,
-    rows.map((p) => p.id),
-  );
+  const { data: variants } = await supabase
+    .from("products")
+    .select("id, normalized_id")
+    .in("normalized_id", rows.map((p) => p.id))
+    .eq("active", true);
+  const linked = (variants ?? []) as { id: string; normalized_id: string }[];
+  const batch = await latestPricesBatch(supabase, linked.map((p) => p.id));
+  const pricesByCanonical = new Map<string, Map<string, LatestPrice>>();
+  for (const variant of linked) {
+    const byMarket = pricesByCanonical.get(variant.normalized_id) ?? new Map();
+    for (const price of batch.get(variant.id) ?? []) {
+      const previous = byMarket.get(price.market_id);
+      if (!previous || price.collected_at > previous.collected_at) byMarket.set(price.market_id, price);
+    }
+    pricesByCanonical.set(variant.normalized_id, byMarket);
+  }
   const comPreco = rows
-    .map((p) => ({ product: p, latest: batch.get(p.id) ?? [] }))
+    .map((p) => ({ product: p, latest: [...(pricesByCanonical.get(p.id)?.values() ?? [])] }))
     .filter((c) => c.latest.length > 0);
   if (comPreco.length === 0) {
     return (
@@ -105,22 +112,39 @@ async function OndeComprarHoje() {
     .order("name");
   const markets = (marketsData ?? []) as { id: string; name: string; slug: string }[];
   if (markets.length === 0) return null;
-  const { data: recent } = await supabase
-    .from("prices")
-    .select("market_id, price, promotional_price")
-    .order("collected_at", { ascending: false })
-    .limit(200);
-  const rows = (recent ?? []) as {
-    market_id: string;
-    price: number | string;
-    promotional_price: number | string | null;
-  }[];
+  const { data: canonical } = await supabase
+    .from("canonical_products")
+    .select("id")
+    .eq("active", true)
+    .order("canonical_name")
+    .limit(100);
+  const canonicalIds = (canonical ?? []).map((p) => p.id as string);
+  const { data: variants } = canonicalIds.length
+    ? await supabase.from("products").select("id, normalized_id").in("normalized_id", canonicalIds).eq("active", true)
+    : { data: [] };
+  const linked = (variants ?? []) as { id: string; normalized_id: string }[];
+  const latestByProduct = await latestPricesBatch(supabase, linked.map((p) => p.id));
+  const comparable = new Map<string, Map<string, number>>();
+  const timestamps = new Map<string, Map<string, string>>();
+  for (const variant of linked) {
+    const byMarket = comparable.get(variant.normalized_id) ?? new Map<string, number>();
+    const dates = timestamps.get(variant.normalized_id) ?? new Map<string, string>();
+    for (const price of latestByProduct.get(variant.id) ?? []) {
+      if ((dates.get(price.market_id) ?? "") >= price.collected_at) continue;
+      dates.set(price.market_id, price.collected_at);
+      byMarket.set(price.market_id, price.promotional_price ?? price.price);
+    }
+    comparable.set(variant.normalized_id, byMarket);
+    timestamps.set(variant.normalized_id, dates);
+  }
   const sums = new Map<string, { sum: number; n: number }>();
-  for (const r of rows) {
-    const e = sums.get(r.market_id) ?? { sum: 0, n: 0 };
-    e.sum += Number(r.promotional_price ?? r.price);
-    e.n += 1;
-    sums.set(r.market_id, e);
+  for (const byMarket of comparable.values()) {
+    for (const [marketId, price] of byMarket) {
+      const total = sums.get(marketId) ?? { sum: 0, n: 0 };
+      total.sum += price;
+      total.n += 1;
+      sums.set(marketId, total);
+    }
   }
   const ranked = markets
     .filter((m) => (sums.get(m.id)?.n ?? 0) > 0)
@@ -167,7 +191,15 @@ async function OndeComprarHoje() {
 async function OfertasHoje() {
   if (!isSupabaseConfigured()) return null;
   const { drops, lows } = await getCachedDeals();
-  const allDeals = [...drops, ...lows].slice(0, 6);
+  const seen = new Set<string>();
+  const allDeals = [...drops, ...lows].filter((deal) => {
+    const fallbackKey = [deal.brand ?? "", deal.name, deal.quantity ?? "", deal.unit ?? ""]
+      .join("|").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    const key = deal.normalized_id ?? fallbackKey;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 6);
 
   if (allDeals.length === 0) {
     return (
@@ -196,7 +228,7 @@ async function OfertasHoje() {
             />
             <div className="p-3 flex flex-col gap-1">
               <span className="flex items-center gap-2 text-sm font-medium">
-                <span className="truncate">{d.name}</span>
+                <span className="line-clamp-2">{d.name}</span>
                 <Badge variant={d.dropPercent > 0 ? "default" : "secondary"} className="shrink-0 text-[10px]">
                   {d.dropPercent > 0 ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
                 </Badge>
@@ -325,6 +357,22 @@ async function Mercados() {
   );
 }
 
+async function MercadosHero() {
+  if (!isSupabaseConfigured()) return <span>Mercados da região</span>;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("markets")
+    .select("name, slug")
+    .eq("active", true)
+    .order("name");
+  const markets = (data ?? []) as { name: string; slug: string }[];
+  return markets.length ? (
+    <div className="flex flex-wrap gap-x-7 gap-y-2">
+      {markets.map((market) => <Link key={market.slug} className="hover:text-white hover:underline" href={`/mercados/${market.slug}`}>{market.name}</Link>)}
+    </div>
+  ) : <span>Mercados da região</span>;
+}
+
 function SectionSkeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div className="flex flex-col gap-3" aria-hidden>
@@ -388,8 +436,8 @@ export default function HomePage() {
             ))}
           </div>
         </div>
-        <div className="mt-10 flex flex-wrap gap-x-7 gap-y-2 border-t border-white/15 pt-5 text-xs text-emerald-50/75">
-          <span>Fort Atacadista</span><span>SuperKoch</span><span>Brasil Atacadista</span><span>Komprão</span>
+        <div className="mt-10 border-t border-white/15 pt-5 text-xs text-emerald-50/75">
+          <Suspense fallback={<span>Mercados da região</span>}><MercadosHero /></Suspense>
         </div>
       </section>
 
