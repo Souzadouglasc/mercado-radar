@@ -19,8 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 
 const CITIES: { value: CityFilter; label: string }[] = [
   { value: null, label: "Todas as cidades" },
-  { value: "sao-jose", label: "São José (SC)" },
-  // Adicione mais cidades conforme necessário
+  { value: "sao-jose", label: "São José e região" },
+  { value: "florianopolis", label: "Florianópolis" },
 ];
 
 const SORT_OPTIONS = [
