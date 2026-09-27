@@ -158,4 +158,3 @@ export class ProductCatalog {
     return data?.id ?? null;
   }
 }
-
