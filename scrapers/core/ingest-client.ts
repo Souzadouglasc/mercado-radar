@@ -293,4 +293,3 @@ export class IngestClient {
 export function createIngestClient(): IngestClient {
   return new IngestClient();
 }
-
