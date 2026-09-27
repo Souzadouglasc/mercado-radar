@@ -18,7 +18,7 @@ on:
         description: "incremental ou full"
         default: "incremental"
       markets:
-        description: "Mercados separados por vírgula (ex: fort,koch,brasil,komprao)"
+        description: "Mercados separados por vírgula (ex: fort,koch,brasil,komprao,bistek,angeloni)"
         default: ""
       max_actions:
         description: "Máximo de ações para processar neste run"
@@ -72,6 +72,8 @@ jobs:
       - run: npm ci
       - name: Scrape ${{ matrix.market_slug }}
         env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MARKET_SLUG: ${{ matrix.market_slug }}
           SCRAPE_LIMIT: ${{ matrix.limit }}
           SCRAPE_ACTION_IDS: ${{ matrix.action_ids }}
@@ -91,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [fort, koch, brasil, komprao]
+        market: [fort, koch, brasil, komprao, bistek, angeloni]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -102,8 +104,8 @@ jobs:
       - name: Scrape ${{ matrix.market }} (incremental, diário)
         if: github.event.schedule != '0 8 * * 0' && (inputs.mode || 'incremental') == 'incremental'
         env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
           --limit "${{ inputs.limit || '500' }}"
@@ -114,8 +116,8 @@ jobs:
       - name: Scrape ${{ matrix.market }} (full, domingo)
         if: github.event.schedule == '0 8 * * 0' || (inputs.mode || '') == 'full'
         env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >
           npx tsx scrapers/runner/run.ts --market ${{ matrix.market }}
           --limit "${{ inputs.limit || '500' }}"

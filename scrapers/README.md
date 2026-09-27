@@ -34,6 +34,8 @@ npx tsx scrapers/runner/run.ts --market komprao --limit 50 --dry-run
 | Koch | Sitemap de produtos + JSON-LD | Preços expostos na página pública da loja selecionada pelo cookie Osuper. |
 | Brasil Atacadista | WordPress REST + JSON-LD | O provider atual não lê preços embutidos em imagens/PDF de encarte. |
 | Komprão | WordPress REST + JSON-LD | O provider atual não lê preços embutidos em imagens/encartes. |
+| Bistek - Florianópolis (Ilha) | Catálogo público VTEX | Coleta SKU, preço, promoção, EAN e imagem; loja padrão exibida pelo site. |
+| Angeloni - Beira-Mar | Catálogo público VTEX | Coleta SKU, preço, promoção, EAN e imagem; loja padrão exibida pelo site. |
 
 Na consulta de 2026-09-27, o banco tinha 1.633 preços recentes, todos de Fort
 e Koch; não havia coleta automática pública de preços de Brasil Atacadista nem

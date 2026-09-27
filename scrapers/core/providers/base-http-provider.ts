@@ -326,7 +326,7 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
     promotional_price: number | null;
     market_slug: string;
     source_url: string | null;
-    source: "site-jsonld" | "graphql" | "manual" | "encarte";
+    source: "site-jsonld" | "catalog-api" | "graphql" | "manual" | "encarte";
     collected_at: string;
     image_url: string | null;
   } {
