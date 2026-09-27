@@ -67,4 +67,3 @@ $$;
 
 CREATE INDEX IF NOT EXISTS product_aliases_market_raw_name_idx
   ON public.product_aliases(market_id, raw_name);
-
