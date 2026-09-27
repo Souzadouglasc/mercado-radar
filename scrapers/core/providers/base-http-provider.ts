@@ -25,6 +25,25 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+class HttpResponseError extends Error {
+  constructor(readonly status: number, readonly retryAfterMs?: number) {
+    super(`HTTP ${status}`);
+    this.name = "HttpResponseError";
+  }
+}
+
+function isRetryable(error: unknown): boolean {
+  if (!(error instanceof HttpResponseError)) return true;
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
+function retryDelay(error: unknown, attempt: number): number {
+  if (error instanceof HttpResponseError && error.retryAfterMs != null) {
+    return Math.min(30_000, error.retryAfterMs);
+  }
+  return Math.min(8_000, 1_000 * 2 ** attempt);
+}
+
 /**
  * Classe base para providers HTTP.
  * Gerencia: throttle agregado, retry com backoff, concorrência controlada,
@@ -80,7 +99,7 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
 
   /** Normaliza RawProduct → NormalizedProduct (pode ser sobrescrito) */
   protected async normalizeItem(raw: RawProduct): Promise<NormalizedProduct> {
-    const { normalizeName, parsePrice } = await import("../normalize.js");
+    const { normalizeName } = await import("../normalize.js");
     const parsed = normalizeName(raw.name);
 
     // Normaliza unidade para base (kg, L, un)
@@ -169,11 +188,15 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
           headers,
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const retryAfter = Number(res.headers.get("retry-after"));
+          throw new HttpResponseError(res.status, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
+        }
         return await res.text();
       } catch (err) {
         lastError = err;
-        if (attempt < retries) await sleep(1000 * 2 ** attempt); // 1s, 2s, 4s...
+        if (attempt >= retries || !isRetryable(err)) break;
+        await sleep(retryDelay(err, attempt));
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -199,11 +222,15 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
           headers,
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const retryAfter = Number(res.headers.get("retry-after"));
+          throw new HttpResponseError(res.status, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
+        }
         return (await res.json()) as T;
       } catch (err) {
         lastError = err;
-        if (attempt < retries) await sleep(1000 * 2 ** attempt);
+        if (attempt >= retries || !isRetryable(err)) break;
+        await sleep(retryDelay(err, attempt));
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -333,3 +360,4 @@ export abstract class BaseHttpProvider<TConfig extends Record<string, unknown> =
     };
   }
 }
+

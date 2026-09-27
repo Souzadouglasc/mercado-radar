@@ -11,29 +11,54 @@ export interface JsonLdProduct {
   sku?: string;
   brand?: string;
   image?: string; // normalized to single string in normalizeJsonLd
-  offers?: { price?: string | number; availability?: string };
+  offers?: { price?: string | number; lowPrice?: string | number; availability?: string };
 }
 
-/** Extrai blocos JSON-LD de um HTML e retorna o de @type Product (se houver). */
-export function extractJsonLdProduct(html: string): JsonLdProduct | null {
-  const re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+/** Extrai produtos de JSON-LD, inclusive @graph e offers em lista. */
+export function extractJsonLdProducts(html: string): JsonLdProduct[] {
+  const products: JsonLdProduct[] = [];
+  const seen = new Set<string>();
+  const re = /<script\b(?=[^>]*\btype\s*=\s*["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script\s*>/gi;
   for (const m of html.matchAll(re)) {
     try {
       const data = JSON.parse(m[1]);
-      const blocks = Array.isArray(data) ? data : [data];
-      for (const b of blocks) {
-        const types = Array.isArray(b?.["@type"]) ? b["@type"] : [b?.["@type"]];
-        if (b && types.includes("Product")) return normalizeJsonLd(b);
+      const pending = Array.isArray(data) ? [...data] : [data];
+      while (pending.length) {
+        const block = pending.shift();
+        if (!block || typeof block !== "object") continue;
+        const b = block as Record<string, unknown>;
+        const types = Array.isArray(b["@type"]) ? b["@type"] : [b["@type"]];
+        if (types.some((type) => typeof type === "string" && type.split("/").pop()?.split(":").pop()?.toLowerCase() === "product")) {
+          const product = normalizeJsonLd(b);
+          const key = `${product.sku ?? ""}|${product.name}|${String(product.offers?.price ?? product.offers?.lowPrice ?? "")}`;
+          if (product.name.trim() && !seen.has(key)) {
+            seen.add(key);
+            products.push(product);
+          }
+        }
+        for (const key of ["@graph", "mainEntity", "itemListElement"]) {
+          const child = b[key];
+          if (Array.isArray(child)) pending.push(...child);
+          else if (child && typeof child === "object") pending.push(child);
+        }
       }
     } catch {
       // bloco inválido — tenta o próximo
     }
   }
-  return null;
+  return products;
+}
+
+/** Mantém compatibilidade para consumidores que esperam somente um produto. */
+export function extractJsonLdProduct(html: string): JsonLdProduct | null {
+  return extractJsonLdProducts(html)[0] ?? null;
 }
 
 function normalizeJsonLd(b: Record<string, unknown>): JsonLdProduct {
-  const offers = (b.offers as Record<string, unknown> | undefined) ?? {};
+  const rawOffers = Array.isArray(b.offers) ? b.offers : [b.offers];
+  const offer = rawOffers
+    .filter((candidate): candidate is Record<string, unknown> => !!candidate && typeof candidate === "object")
+    .find((candidate) => candidate.price != null || candidate.lowPrice != null) ?? {};
   const brand = b.brand;
   return {
     name: String(b.name ?? ""),
@@ -50,8 +75,9 @@ function normalizeJsonLd(b: Record<string, unknown>): JsonLdProduct {
         ? b.image
         : undefined,
     offers: {
-      price: offers.price as string | number | undefined,
-      availability: offers.availability as string | undefined,
+      price: offer.price as string | number | undefined,
+      lowPrice: offer.lowPrice as string | number | undefined,
+      availability: offer.availability as string | undefined,
     },
   };
 }
@@ -82,9 +108,7 @@ export interface ProductPrice {
 export function toProductPrice(input: ToProductPriceInput): ProductPrice | null {
   const { jsonld, marketSlug, sourceUrl, collectedAt } = input;
   if (!jsonld.name?.trim()) return null;
-  const price = parsePrice(
-    jsonld.offers?.price != null ? String(jsonld.offers.price) : null,
-  );
+  const price = parsePrice(String(jsonld.offers?.price ?? jsonld.offers?.lowPrice ?? ""));
   if (price == null) return null;
   const parsed = normalizeName(jsonld.name);
   const imageUrl = jsonld.image?.trim() || null;
@@ -103,3 +127,4 @@ export function toProductPrice(input: ToProductPriceInput): ProductPrice | null 
     image_url: imageUrl,
   };
 }
+

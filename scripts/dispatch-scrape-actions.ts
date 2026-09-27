@@ -20,6 +20,13 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+interface ScrapeActionRow {
+  id: string;
+  market_slug: string;
+  action_type: string;
+  params: Record<string, unknown>;
+}
+
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -39,6 +46,24 @@ function parseArgs(argv: string[]) {
 async function main() {
   const { maxActions, markets } = parseArgs(process.argv.slice(2));
 
+  // Recover actions abandoned by a cancelled or timed-out GitHub Actions job.
+  // The queue has no lease column, so started_at is the recovery cutoff.
+  const staleBefore = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  const { error: recoveryError } = await supabase
+    .from("scrape_actions")
+    .update({
+      status: "pending",
+      started_at: null,
+      finished_at: null,
+      error_summary: "Execução anterior expirou; ação devolvida à fila.",
+    })
+    .eq("status", "running")
+    .lt("started_at", staleBefore);
+  if (recoveryError) {
+    console.error("Erro ao recuperar ações expiradas:", recoveryError.message);
+    process.exit(1);
+  }
+
   const matrix: Array<{
     market_slug: string;
     action_ids: string;
@@ -49,10 +74,41 @@ async function main() {
   }> = [];
 
   for (let i = 0; i < maxActions; i++) {
-    // Chama RPC get_next_scrape_action (usa FOR UPDATE SKIP LOCKED para concorrência)
-    const { data: actions, error } = await supabase.rpc("get_next_scrape_action");
+    // Use the atomic RPC for the normal queue. For an explicit market filter,
+    // claim only matching rows with a compare-and-set update so other actions
+    // remain pending for their own workers.
+    let actions: ScrapeActionRow[] | null = null;
+    let error: { message: string } | null = null;
+    if (markets.length > 0) {
+      const { data: candidate, error: selectError } = await supabase
+        .from("scrape_actions")
+        .select("*")
+        .eq("status", "pending")
+        .in("market_slug", markets)
+        .order("priority", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (selectError) error = selectError;
+      else if (candidate) {
+        const { data: claimed, error: claimError } = await supabase
+          .from("scrape_actions")
+          .update({ status: "running", started_at: new Date().toISOString() })
+          .eq("id", candidate.id)
+          .eq("status", "pending")
+          .select();
+        if (claimError) error = claimError;
+        actions = claimed ?? [];
+      } else {
+        actions = [];
+      }
+    } else {
+      const result = await supabase.rpc("get_next_scrape_action");
+      actions = result.data;
+      error = result.error;
+    }
     if (error) {
-      console.error("Erro ao buscar scrape_actions via RPC:", error.message);
+      console.error("Erro ao buscar/assumir scrape_actions:", error.message);
       process.exit(1);
     }
 
@@ -61,17 +117,6 @@ async function main() {
     }
 
     const action = actions[0];
-
-    // Filtra por mercados se especificado
-    if (markets.length > 0 && !markets.includes(action.market_slug)) {
-      // Se não é dos mercados desejados, marca como done e continua
-      await supabase.rpc("complete_scrape_action", {
-        p_action_id: action.id,
-        p_status: "failed",
-        p_error_summary: `Mercado ${action.market_slug} não incluído no filtro --markets`,
-      });
-      continue;
-    }
 
     // Extrai URLs dos params
     const urls = (action.params?.urls as string[]) || [];
@@ -99,3 +144,4 @@ main().catch(err => {
   console.error("Fatal:", err);
   process.exit(1);
 });
+

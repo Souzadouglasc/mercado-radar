@@ -10,12 +10,10 @@ import {
   type CollectResult,
   type MarketMetadata,
   type NormalizedProduct,
-  type RawProduct,
   type UrlOutcome,
-  type RunStats,
 } from "../../provider.js";
-import { parseSitemapEntries, selectEntries, type SitemapEntry } from "../../sitemap.js";
-import { extractJsonLdProduct, toProductPrice, type JsonLdProduct, type ToProductPriceInput } from "../../jsonld.js";
+import { parseSitemapEntries, selectEntries } from "../../sitemap.js";
+import { extractJsonLdProducts, toProductPrice, type JsonLdProduct } from "../../jsonld.js";
 
 export interface OsuperProviderConfig {
   /** Slug em markets.slug (ex.: "fort") */
@@ -32,8 +30,6 @@ export interface OsuperProviderConfig {
   city?: string;
   [key: string]: unknown;
 }
-
-const INCREMENTAL_MAX_AGE_MS = 72 * 3600 * 1000; // 72h
 
 export class OsuperProvider extends BaseHttpProvider {
   private readonly osuperConfig: OsuperProviderConfig;
@@ -79,12 +75,10 @@ export class OsuperProvider extends BaseHttpProvider {
     const incremental = (options.incremental ?? false) && !options.full;
 
     let urls: string[];
-    let actionIds: string[] = [];
 
     // Dynamic matrix mode: usar URLs específicas das scrape_actions
     if (options.actionUrls && options.actionUrls.length > 0) {
       urls = options.actionUrls;
-      actionIds = options.actionIds || [];
       console.log(`[${this.slug}] Dynamic matrix mode: ${urls.length} URLs from scrape_actions`);
     } else {
       // Modo tradicional: sitemap
@@ -114,28 +108,27 @@ export class OsuperProvider extends BaseHttpProvider {
     const headers = this.getExtraHeaders();
 
     // 4. Coleta paralela com throttle
-    const results = await this.parallelWithThrottle<NormalizedProduct | null>(
+    const requestErrors: Array<string | undefined> = new Array(urls.length);
+    const results = await this.parallelWithThrottle<NormalizedProduct[]>(
       urls,
       async (url, index) => {
         const collectedAt = new Date().toISOString();
         try {
           const html = await this.fetchText(url, retries, headers);
-          const jsonld = extractJsonLdProduct(html);
-          if (!jsonld) {
-            return null;
+          const products = extractJsonLdProducts(html);
+          if (products.length === 0) {
+            requestErrors[index] = "jsonld_product_not_found";
+            return [];
           }
-          const item = toProductPrice({
-            jsonld,
-            marketSlug: this.slug,
-            sourceUrl: url,
-            collectedAt,
+          const normalized = products.flatMap((jsonld) => {
+            const item = toProductPrice({ jsonld, marketSlug: this.slug, sourceUrl: url, collectedAt });
+            return item ? [this.productPriceToNormalized(item, jsonld)] : [];
           });
-          if (!item) return null;
-
-          // Converte ProductPrice (contrato ingest) → NormalizedProduct
-          return this.productPriceToNormalized(item, jsonld);
+          if (normalized.length === 0) requestErrors[index] = "jsonld_product_without_valid_price";
+          return normalized;
         } catch (err) {
-          return null;
+          requestErrors[index] = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200);
+          return [];
         }
       },
       { concurrency, throttleMs, onProgress: options.onProgress }
@@ -147,30 +140,21 @@ export class OsuperProvider extends BaseHttpProvider {
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
-      const normalized = results[i];
-      if (normalized) {
-        items.push(normalized);
+      const normalized = results[i] ?? [];
+      if (normalized.length > 0) {
+        items.push(...normalized);
         outcomes.push({ url, ok: true });
       } else {
         outcomes.push({
           url,
           ok: false,
-          error: results[i] === null ? "jsonld_not_found_or_invalid_price" : "unknown_error",
+          error: requestErrors[i] ?? "request_failed",
         });
       }
     }
 
     const finishedAt = new Date().toISOString();
     const stats = this.toRunStats({ items, outcomes, startedAt, finishedAt } as CollectResult);
-
-    // Se dynamic matrix, adicionar action_ids aos outcomes para complete_scrape_action
-    if (actionIds.length > 0) {
-      for (let i = 0; i < outcomes.length; i++) {
-        if (actionIds[i]) {
-          (outcomes[i] as any).action_id = actionIds[i];
-        }
-      }
-    }
 
     return {
       items,
@@ -221,3 +205,4 @@ export class OsuperProvider extends BaseHttpProvider {
     };
   }
 }
+

@@ -49,8 +49,6 @@ function slugify(value: string): string {
 interface MarketRow { id: string; slug: string }
 interface RunRow { id: string }
 interface ProductRow { id: string }
-interface AliasRow { product_id: string }
-
 export class IngestClient {
   private supabase: SupabaseClient;
 
@@ -74,9 +72,16 @@ export class IngestClient {
     if (marketsError) throw new Error(`Falha ao buscar mercados: ${marketsError.message}`);
     const marketBySlug = new Map((markets as MarketRow[]).map((m) => [m.slug, m.id]));
 
+    const uniqueMarketIds = [...new Set(marketBySlug.values())];
+    const runRow: Record<string, unknown> = {
+      status: "PARTIAL",
+      products_found: items.length,
+    };
+    if (uniqueMarketIds.length === 1) runRow.market_id = uniqueMarketIds[0];
+
     const { data: run, error: runError } = await this.supabase
       .from("scrape_runs")
-      .insert({ status: "PARTIAL", products_found: items.length })
+      .insert(runRow)
       .select("id")
       .single();
     if (runError) throw new Error(`Falha ao registrar run: ${runError.message}`);
@@ -235,3 +240,4 @@ export class IngestClient {
 export function createIngestClient(): IngestClient {
   return new IngestClient();
 }
+

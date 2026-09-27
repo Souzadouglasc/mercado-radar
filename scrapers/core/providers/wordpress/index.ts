@@ -10,10 +10,9 @@ import {
   type CollectResult,
   type MarketMetadata,
   type NormalizedProduct,
-  type RawProduct,
   type UrlOutcome,
-  type RunStats,
 } from "../../provider.js";
+import { extractJsonLdProducts, toProductPrice, type JsonLdProduct } from "../../jsonld.js";
 
 export interface WordPressProviderConfig {
   /** Slug em markets.slug (ex.: "brasil", "komprao") */
@@ -52,6 +51,18 @@ interface WpSearchResult {
   url: string;
   date: string;
   images: string[];
+  jsonLd: JsonLdProduct[];
+}
+
+interface WpActionPost {
+  id: number;
+  title: string | { rendered?: string };
+  link?: string;
+  url?: string;
+  date?: string;
+  content?: { rendered?: string };
+  yoast_head?: string;
+  _embedded?: WpPost["_embedded"];
 }
 
 export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig> {
@@ -85,19 +96,17 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     const throttleMs = options.throttleMs ?? this.defaultThrottleMs;
 
     let searchResults: WpSearchResult[];
-    let actionIds: string[] = [];
 
     // Dynamic matrix mode: usar URLs específicas das scrape_actions
     if (options.actionUrls && options.actionUrls.length > 0) {
       console.log(`[${this.slug}] Dynamic matrix mode: ${options.actionUrls.length} URLs from scrape_actions`);
       searchResults = await this.fetchActionUrls(options.actionUrls);
-      actionIds = options.actionIds || [];
     } else {
       // Modo tradicional: busca encartes/ofertas
       searchResults = await this.searchEncartes(limit);
     }
 
-    // 2. Para cada resultado, cria NormalizedProduct (price=0 placeholder)
+    // A page only becomes a product when it publishes a structured, valid price.
     const items: NormalizedProduct[] = [];
     const outcomes: UrlOutcome[] = [];
 
@@ -105,8 +114,16 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
       const sr = searchResults[i];
       await this.sleep(throttleMs); // throttle sequencial
       try {
-        const item = this.createEncarteProduct(sr);
-        items.push(item);
+        const products = sr.jsonLd
+          .map((jsonld) => toProductPrice({ jsonld, marketSlug: this.slug, sourceUrl: sr.url, collectedAt: new Date().toISOString() }))
+          .filter((product): product is NonNullable<typeof product> => product !== null);
+        if (products.length === 0) {
+          outcomes.push({ url: sr.url, ok: false, error: "no_public_structured_product_price" });
+          continue;
+        }
+        for (const product of products) {
+          items.push(this.productPriceToNormalized(product, sr.images[0] ?? null));
+        }
         outcomes.push({ url: sr.url, ok: true });
       } catch (err) {
         outcomes.push({
@@ -119,15 +136,6 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
 
     const finishedAt = new Date().toISOString();
     const stats = this.toRunStats({ items, outcomes, startedAt, finishedAt } as CollectResult);
-
-    // Se dynamic matrix, adicionar action_ids aos outcomes para complete_scrape_action
-    if (actionIds.length > 0) {
-      for (let i = 0; i < outcomes.length; i++) {
-        if (actionIds[i]) {
-          (outcomes[i] as any).action_id = actionIds[i];
-        }
-      }
-    }
 
     return {
       items,
@@ -159,7 +167,7 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
           postUrl = `${this.wpConfig.wpJsonUrl}/wp/v2/search?search=${encodeURIComponent(url)}&per_page=1`;
         }
 
-        const data = await this.fetchJson<any[]>(postUrl);
+        const data = await this.fetchJson<WpActionPost[]>(postUrl);
         if (data.length > 0) {
           const post = data[0];
           const images: string[] = [];
@@ -184,10 +192,11 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
 
           results.push({
             id: post.id,
-            title: post.title?.rendered ?? "Oferta",
-            url: post.link ?? url,
-            date: post.date,
+            title: typeof post.title === "string" ? post.title : post.title?.rendered ?? "Oferta",
+            url: post.link ?? post.url ?? url,
+            date: post.date ?? new Date().toISOString(),
             images: [...new Set(images)],
+            jsonLd: extractJsonLdProducts(post.content?.rendered ?? ""),
           });
         }
       } catch (err) {
@@ -257,6 +266,7 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
           url: post.link,
           date: post.date,
           images: [...new Set(images)],
+          jsonLd: extractJsonLdProducts(post.content?.rendered ?? ""),
         });
       }
     }
@@ -316,6 +326,7 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
           url: oferta.link,
           date: oferta.date,
           images: [...new Set(images)],
+          jsonLd: extractJsonLdProducts(oferta.content?.rendered ?? ""),
         });
       }
       
@@ -326,46 +337,28 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     return results.slice(0, limit);
   }
 
-  /** Cria NormalizedProduct para encarte (price=0, source='encarte') */
-  private createEncarteProduct(sr: WpSearchResult): NormalizedProduct {
-    const collectedAt = new Date().toISOString();
-    const baseUnit = this.normalizeUnit(null);
-    const baseQty = this.toBaseQuantity(null, null);
-
+  private productPriceToNormalized(product: NonNullable<ReturnType<typeof toProductPrice>>, fallbackImage: string | null): NormalizedProduct {
+    const baseUnit = this.normalizeUnit(product.unit);
+    const baseQty = this.toBaseQuantity(product.quantity, product.unit);
     return {
-      canonicalName: sr.title, // será normalizado no catalog
-      brand: null,
-      barcode: null,
+      canonicalName: product.product_name,
+      brand: product.brand,
+      barcode: product.barcode,
       marketSku: null,
-      quantity: null,
-      unit: null,
+      quantity: product.quantity,
+      unit: product.unit,
       normalizedQuantity: baseQty,
       normalizedUnit: baseUnit,
-      price: 0, // placeholder — preenchido manualmente ou via OCR futuro
-      promotionalPrice: null,
-      imageUrl: sr.images[0] ?? null,
-      sourceUrl: sr.url,
-      source: "encarte",
-      collectedAt,
+      price: product.price,
+      promotionalPrice: product.promotional_price,
+      imageUrl: product.image_url ?? fallbackImage,
+      sourceUrl: product.source_url,
+      source: product.source,
+      collectedAt: product.collected_at,
       marketSlug: this.slug,
-      rawName: sr.title,
-      categoryHint: this.inferCategoryFromTitle(sr.title),
+      rawName: product.product_name,
+      categoryHint: null,
     };
-  }
-
-  /** Infere dica de categoria pelo título do encarte */
-  private inferCategoryFromTitle(title: string): string {
-    const t = title.toLowerCase();
-    if (t.includes("hortifruti") || t.includes("fruta") || t.includes("verdura") || t.includes("legume")) return "Hortifruti";
-    if (t.includes("açougue") || t.includes("carne") || t.includes("frango") || t.includes("peixe")) return "Açougue";
-    if (t.includes("frios") || t.includes("laticínio") || t.includes("leite") || t.includes("queijo") || t.includes("iogurte")) return "Frios e Laticínios";
-    if (t.includes("bebida") || t.includes("cerveja") || t.includes("refrigerante") || t.includes("suco") || t.includes("água")) return "Bebidas";
-    if (t.includes("limpeza") || t.includes("detergente") || t.includes("sabão") || t.includes("amaciante")) return "Limpeza";
-    if (t.includes("higiene") || t.includes("beleza") || t.includes("shampoo") || t.includes("sabonete") || t.includes("pasta")) return "Higiene e Beleza";
-    if (t.includes("padaria") || t.includes("pão") || t.includes("bolo") || t.includes("biscoito")) return "Padaria";
-    if (t.includes("congelado") || t.includes("gelado") || t.includes("sorvete")) return "Congelados";
-    if (t.includes("pet") || t.includes("ração") || t.includes("gato") || t.includes("cachorro")) return "Pet";
-    return "Mercearia"; // default
   }
 
   private sleep(ms: number): Promise<void> {
@@ -384,3 +377,4 @@ export class WordPressProvider extends BaseHttpProvider<WordPressProviderConfig>
     };
   }
 }
+

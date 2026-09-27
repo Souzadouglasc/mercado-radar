@@ -44,10 +44,13 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAX_ACTIONS: ${{ inputs.max_actions || '20' }}
+          MARKETS: ${{ inputs.markets }}
         run: |
-          npx tsx scripts/dispatch-scrape-actions.ts \
-            --max-actions ${{ inputs.max_actions }} \
-            --markets ${{ inputs.markets }} | tee dispatch-output.json
+          set -euo pipefail
+          args=(--max-actions "$MAX_ACTIONS")
+          if [[ -n "$MARKETS" ]]; then args+=(--markets "$MARKETS"); fi
+          npx tsx scripts/dispatch-scrape-actions.ts "${args[@]}" | tee dispatch-output.json
           echo "matrix=$(cat dispatch-output.json | jq -c .matrix)" >> $GITHUB_OUTPUT
           echo "hasWork=$(cat dispatch-output.json | jq -r .hasWork)" >> $GITHUB_OUTPUT
 
@@ -69,15 +72,16 @@ jobs:
       - run: npm ci
       - name: Scrape ${{ matrix.market_slug }}
         env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MARKET_SLUG: ${{ matrix.market_slug }}
+          SCRAPE_LIMIT: ${{ matrix.limit }}
+          SCRAPE_ACTION_IDS: ${{ matrix.action_ids }}
+          SCRAPE_ACTION_URLS: ${{ matrix.action_urls }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          npx tsx scrapers/runner/run.ts --market ${{ matrix.market_slug }} \
-            --limit ${{ matrix.limit }} \
-            --action-ids "${{ matrix.action_ids }}" \
-            --action-urls "${{ matrix.action_urls }}" \
-            --concurrency 4 \
-            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+          args=(--market "$MARKET_SLUG" --limit "$SCRAPE_LIMIT" \
+            --action-ids "$SCRAPE_ACTION_IDS" --action-urls "$SCRAPE_ACTION_URLS" --concurrency 4)
+          if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
+          npx tsx scrapers/runner/run.ts "${args[@]}"
 
   scrape-fallback:
     name: Scrape Fallback (Traditional)
@@ -118,3 +122,4 @@ jobs:
           --full
           --concurrency 4
           ${{ inputs.dry_run == 'true' && '--dry-run' || '' }}
+
