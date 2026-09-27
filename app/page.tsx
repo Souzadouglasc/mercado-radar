@@ -45,7 +45,7 @@ async function Comparador() {
     .select("id, canonical_name, slug, brand, unit, quantity, image_url")
     .eq("active", true)
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(200);
   const rows = ((products ?? []) as {
     id: string;
     canonical_name: string;
@@ -81,7 +81,9 @@ async function Comparador() {
   }
   const comPreco = rows
     .map((p) => ({ product: p, latest: [...(pricesByCanonical.get(p.id)?.values() ?? [])] }))
-    .filter((c) => c.latest.length > 0);
+    .filter((c) => c.latest.length > 0)
+    .sort((a, b) => b.latest.length - a.latest.length)
+    .slice(0, 6);
   if (comPreco.length === 0) {
     return (
       <EmptyState
@@ -453,7 +455,7 @@ export default function HomePage() {
       </section>
 
       <section className="space-y-5">
-        <SectionHeading icon={<TrendingDown className="h-5 w-5" />} eyebrow="Compare antes de sair" title="Preços por mercado" description="Últimos preços encontrados para cada produto." />
+        <SectionHeading icon={<TrendingDown className="h-5 w-5" />} eyebrow="Compare antes de sair" title="Preços por mercado" description="Produtos com preços coletados em mais mercados." />
         <Suspense fallback={<SectionSkeleton />}><Comparador /></Suspense>
       </section>
 
