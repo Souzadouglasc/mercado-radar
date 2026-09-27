@@ -82,7 +82,7 @@ export function toBaseQuantity(quantity: number | null, unit: string | null): nu
  * @returns UnitPriceResult ou null se não for possível calcular
  */
 export function pricePerUnit(
-  price: number,
+  price: number | null,
   quantity: number | null,
   unit: string | null
 ): UnitPriceResult | null {
