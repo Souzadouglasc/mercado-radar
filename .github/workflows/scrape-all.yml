@@ -165,4 +165,3 @@ jobs:
             args+=(--incremental)
           fi
           npx tsx scrapers/runner/run.ts "${args[@]}"
-
