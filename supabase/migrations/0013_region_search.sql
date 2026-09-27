@@ -73,4 +73,3 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.search_products_ft(text, integer, text)
   TO anon, authenticated, service_role;
-
