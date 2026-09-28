@@ -244,8 +244,8 @@ async function OfertasHoje() {
               alt={d.name}
             />
             <div className="p-3 flex flex-col gap-1">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <span className="line-clamp-2">{d.name}</span>
+              <span className="flex flex-col items-start gap-2 text-sm font-medium">
+                <span className="break-words leading-snug">{d.name}</span>
                 <Badge variant={d.dropPercent > 0 ? "default" : "secondary"} className="shrink-0 text-[10px]">
                   {d.dropPercent > 0 ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
                 </Badge>
@@ -499,3 +499,4 @@ function SectionHeading({ icon, eyebrow, title, description }: { icon: React.Rea
     </div>
   );
 }
+
