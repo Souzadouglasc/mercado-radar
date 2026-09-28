@@ -69,35 +69,28 @@ export function ProductCard({
         </div>
       )}
 
-      {!isCompact && (
-        <CardHeader className="pb-4">
+      <CardHeader className={isCompact ? "pb-3" : "pb-4"}>
           <CardTitle className="flex items-start justify-between gap-2 text-base">
             <Link
               href={`/produtos/${product.slug}`}
-              className="flex min-w-0 items-center gap-3 hover:underline"
+              className="flex min-w-0 flex-1 items-start gap-3 hover:underline"
             >
               <ProductImage
                 image_url={product.image_url}
                 product={{ name: productName, brand: product.brand }}
                 aspect="square"
-                className="h-16 w-16 shrink-0 rounded-xl overflow-hidden border border-primary/20"
+                className="h-16 w-16 shrink-0 rounded-xl border border-primary/20"
                 alt={productName}
               />
-              <span className="min-w-0">
-                <span className="block truncate font-semibold">{productName}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block line-clamp-3 break-words font-semibold leading-snug">{productName}</span>
                 {product.brand && (
-                  <span className="block truncate text-xs font-normal text-muted-foreground">
+                  <span className="block line-clamp-1 text-xs font-normal text-muted-foreground">
                     {product.brand}
                   </span>
                 )}
               </span>
             </Link>
-            {discountVsAvg >= 5 && cheapest && (
-              <Badge variant="secondary" className="gap-1 text-[10px] text-offer shimmer-pronto px-2 py-1">
-                <TrendingDown className="h-3 w-3" aria-hidden />
-                {discountVsAvg}% abaixo da média
-              </Badge>
-            )}
             {favorite !== undefined && (
               <FavoriteButton
                 targetType="product"
@@ -107,16 +100,15 @@ export function ProductCard({
               />
             )}
           </CardTitle>
-          {discountVsAvg >= 5 && cheapest && (
-            <p className="pt-1">
+          {discountVsAvg >= 5 && cheapest && !isCompact && (
+            <div className="pt-1">
               <Badge variant="secondary" className="gap-1 text-[10px] text-offer bg-offer/10 border-offer/20">
                 <TrendingDown className="h-3 w-3" aria-hidden />
                 {discountVsAvg}% abaixo da média
               </Badge>
-            </p>
+            </div>
           )}
         </CardHeader>
-      )}
 
       <CardContent className="flex flex-col gap-2">
         {sorted.length === 0 ? (
@@ -186,3 +178,4 @@ export function ProductCard({
     </Card>
   );
 }
+
