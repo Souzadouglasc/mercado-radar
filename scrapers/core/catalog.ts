@@ -187,6 +187,26 @@ export class ProductCatalog {
       return { productId: byCanonical.id, isNew: false, matchedBy: "canonical" };
     }
 
+    const { data: fuzzyCanonicalId, error: fuzzyMatchError } = await this.supabase.rpc(
+      "match_canonical_product",
+      {
+        p_canonical_name: product.canonicalName,
+        p_brand: product.brand,
+        p_normalized_quantity: product.normalizedQuantity,
+        p_normalized_unit: product.normalizedUnit,
+      },
+    );
+    if (fuzzyMatchError) {
+      throw new Error(`Falha ao buscar correspondência segura de catálogo: ${fuzzyMatchError.message}`);
+    }
+    if (typeof fuzzyCanonicalId === "string") {
+      await this.supabase
+        .from("canonical_products")
+        .update({ updated_at: product.collectedAt })
+        .eq("id", fuzzyCanonicalId);
+      return { productId: fuzzyCanonicalId, isNew: false, matchedBy: "canonical" };
+    }
+
     const storageSlug = productPack
       ? slugWithPack(canonicalSlug, productPack)
       : slugCollision
