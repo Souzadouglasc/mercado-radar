@@ -125,36 +125,7 @@ export class ProductCatalog {
       }
     }
 
-    // 2. Tenta alias (market + raw_name)
-    const marketId = await this.getMarketId(product.marketSlug);
-    if (marketId) {
-      const { data: alias } = await this.supabase
-        .from("product_aliases")
-        .select("canonical_id")
-        .eq("market_id", marketId)
-        .eq("raw_name", product.rawName)
-        .not("canonical_id", "is", null)
-        .limit(1)
-        .maybeSingle();
-      
-      if (alias?.canonical_id) {
-        const { data: canonical } = await this.supabase
-          .from("canonical_products")
-          .select("id, quantity, unit, normalized_quantity, normalized_unit")
-          .eq("id", alias.canonical_id)
-          .maybeSingle();
-
-        if (canonical && sameCanonicalPack(canonical as CanonicalProductRow, product)) {
-          await this.supabase
-            .from("canonical_products")
-            .update({ updated_at: product.collectedAt })
-            .eq("id", alias.canonical_id);
-          return { productId: alias.canonical_id, isNew: false, matchedBy: "alias" };
-        }
-      }
-    }
-
-    // 3. Tenta nome canônico exato (via slug) em canonical_products
+    // 2. Tenta nome canônico exato (via slug) em canonical_products
     const canonicalSlug = slugify(product.canonicalName);
     const productPack = normalizedPack(
       product.quantity,
@@ -187,13 +158,63 @@ export class ProductCatalog {
       return { productId: byCanonical.id, isNew: false, matchedBy: "canonical" };
     }
 
+    const { data: fuzzyCanonicalId, error: fuzzyMatchError } = await this.supabase.rpc(
+      "match_canonical_product",
+      {
+        p_canonical_name: product.canonicalName,
+        p_brand: product.brand,
+        p_normalized_quantity: product.normalizedQuantity,
+        p_normalized_unit: product.normalizedUnit,
+      },
+    );
+    if (fuzzyMatchError) {
+      throw new Error(`Falha ao buscar correspondência segura de catálogo: ${fuzzyMatchError.message}`);
+    }
+    if (typeof fuzzyCanonicalId === "string") {
+      await this.supabase
+        .from("canonical_products")
+        .update({ updated_at: product.collectedAt })
+        .eq("id", fuzzyCanonicalId);
+      return { productId: fuzzyCanonicalId, isNew: false, matchedBy: "canonical" };
+    }
+
+    // 4. Tenta alias (market + raw_name) por último. Assim, um alias antigo
+    // não impede uma correspondência segura entre mercados diferentes.
+    const marketId = await this.getMarketId(product.marketSlug);
+    if (marketId) {
+      const { data: alias } = await this.supabase
+        .from("product_aliases")
+        .select("canonical_id")
+        .eq("market_id", marketId)
+        .eq("raw_name", product.rawName)
+        .not("canonical_id", "is", null)
+        .limit(1)
+        .maybeSingle();
+
+      if (alias?.canonical_id) {
+        const { data: canonical } = await this.supabase
+          .from("canonical_products")
+          .select("id, quantity, unit, normalized_quantity, normalized_unit")
+          .eq("id", alias.canonical_id)
+          .maybeSingle();
+
+        if (canonical && sameCanonicalPack(canonical as CanonicalProductRow, product)) {
+          await this.supabase
+            .from("canonical_products")
+            .update({ updated_at: product.collectedAt })
+            .eq("id", alias.canonical_id);
+          return { productId: alias.canonical_id, isNew: false, matchedBy: "alias" };
+        }
+      }
+    }
+
     const storageSlug = productPack
       ? slugWithPack(canonicalSlug, productPack)
       : slugCollision
         ? slugWithPack(canonicalSlug, "unknown-pack")
         : canonicalSlug;
 
-    // 4. Cria novo canonical_product
+    // 5. Cria novo canonical_product
     let categoryId: string | null = null;
     if (product.categoryHint) {
       const { data } = await this.supabase
