@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Price } from "@/components/price";
+import { ProductImage } from "@/components/product-image";
 import { cn } from "@/lib/utils";
 
 type Hit = {
@@ -150,21 +151,13 @@ export function SearchAutocomplete({ compact = false }: { compact?: boolean }) {
                   i === active ? "bg-accent" : "hover:bg-accent",
                 )}
               >
-                {h.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={h.image_url}
-                    alt=""
-                    width={32}
-                    height={32}
-                    loading="lazy"
-                    className="h-8 w-8 shrink-0 rounded-md bg-muted object-cover"
-                  />
-                ) : (
-                  <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold text-muted-foreground">
-                    {h.name.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
+                <ProductImage
+                  image_url={h.image_url}
+                  product={{ name: h.name, brand: h.brand }}
+                  alt=""
+                  className="h-8 w-8 shrink-0 rounded-md"
+                  sizes="32px"
+                />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{h.name}</span>
                   {h.brand && <span className="truncate text-xs text-muted-foreground">{h.brand}</span>}
@@ -187,3 +180,4 @@ export function SearchAutocomplete({ compact = false }: { compact?: boolean }) {
     </div>
   );
 }
+

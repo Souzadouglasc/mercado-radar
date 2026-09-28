@@ -281,7 +281,6 @@ function CategoryIcon({ category, className = "h-8 w-8" }: { category: ProductCa
  * @param aspect - Aspect ratio: 'square' (mobile cards), 'video' (página produto), 'landscape' (ofertas)
  * @param priority - Se true, carrega com priority (hero images)
  * @param sizes - sizes attribute para Next/Image
- * @param fill - Se true, usa fill (container relativo)
  */
 export function ProductImage({
   image_url,
@@ -291,7 +290,6 @@ export function ProductImage({
   aspect = "square",
   priority = false,
   sizes,
-  fill = false,
 }: {
   image_url: string | null | undefined;
   product?: { name: string; brand?: string | null; category?: string | null } | null;
@@ -300,9 +298,8 @@ export function ProductImage({
   aspect?: "square" | "video" | "landscape" | "portrait";
   priority?: boolean;
   sizes?: string;
-  fill?: boolean;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const category = product ? inferCategory(product) : "default";
   const gradient = categoryGradient(category);
 
@@ -322,7 +319,7 @@ export function ProductImage({
 
   const finalSizes = sizes ?? defaultSizes;
 
-  if (image_url && !imageFailed) {
+  if (image_url && image_url !== failedUrl) {
     return (
       <div
         className={cn(
@@ -330,15 +327,14 @@ export function ProductImage({
           aspectClasses,
           className,
         )}
-        style={fill ? undefined : { width: "100%" }}
       >
         <Image
           src={image_url}
           alt={alt ?? product?.name ?? "Produto"}
-          fill={fill}
+          fill
           sizes={finalSizes}
           priority={priority}
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedUrl(image_url)}
           placeholder="blur"
           blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect fill='%23e5e7eb' width='24' height='24'/%3E%3C/svg%3E"
           className="object-cover transition-opacity duration-300"
@@ -358,7 +354,6 @@ export function ProductImage({
         aspectClasses,
         className,
       )}
-      style={fill ? undefined : { width: "100%" }}
       aria-hidden="true"
     >
       <CategoryIcon category={category} className="h-12 w-12 sm:h-16 sm:w-16 opacity-60" />
@@ -391,3 +386,4 @@ export function ProductImageSkeleton({
     </div>
   );
 }
+
