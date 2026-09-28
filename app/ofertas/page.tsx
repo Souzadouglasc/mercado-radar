@@ -27,8 +27,8 @@ function DealGrid({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
           <Link href={`/produtos/${deal.slug}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
             <ProductImage image_url={deal.image_url} product={{ name: deal.name, brand: deal.brand }} aspect="landscape" className="w-full" alt={deal.name} />
             <div className="flex flex-1 flex-col gap-2 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <span className="line-clamp-2 font-semibold leading-snug group-hover:text-primary">{deal.name}</span>
+              <div className="flex flex-col items-start gap-2">
+                <span className="break-words font-semibold leading-snug group-hover:text-primary">{deal.name}</span>
                 <Badge variant={kind === "drop" ? "default" : "secondary"} className="shrink-0">
                   {kind === "drop" ? `-${deal.dropPercent}%` : `${deal.dropPercent}% do mínimo`}
                 </Badge>
@@ -81,3 +81,4 @@ export default async function OfertasPage() {
     </div>
   );
 }
+
