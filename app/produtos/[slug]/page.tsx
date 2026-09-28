@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -15,9 +14,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreateAlertForm } from "@/components/alert-forms";
 import { AddToListForm } from "@/components/add-to-list-form";
 import { ProductImage } from "@/components/product-image";
+import { ProductCard } from "@/components/product-card";
 import {
   HISTORY_RANGE_DAYS,
   latestPrices,
+  latestPricesBatch,
   priceHistory,
   productStats,
   searchProducts,
@@ -252,13 +253,70 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
   }
 
   const supabase = await createClient();
-  const { data: product } = await supabase
+  const { data: product, error: productError } = await supabase
     .from("products")
     .select("id, name, slug, brand, unit, quantity, image_url")
     .eq("slug", slug)
     .eq("active", true)
-    .single();
-  if (!product) notFound();
+    .maybeSingle();
+  if (productError) throw productError;
+  if (!product) {
+    // A home e as categorias também usam slugs de produtos canônicos.
+    // Cada variação mantém seus próprios preços e tamanho de embalagem.
+    const { data: canonical, error: canonicalError } = await supabase
+      .from("canonical_products")
+      .select("id, canonical_name, slug, brand, image_url")
+      .eq("slug", slug)
+      .eq("active", true)
+      .maybeSingle();
+    if (canonicalError) throw canonicalError;
+    if (!canonical) notFound();
+
+    const { data: variants, error: variantsError } = await supabase
+      .from("products")
+      .select("id, name, slug, brand, unit, quantity, image_url")
+      .eq("normalized_id", canonical.id)
+      .eq("active", true)
+      .order("name");
+    if (variantsError) throw variantsError;
+    const products = (variants ?? []) as ProductRow[];
+    const pricesByProduct = await latestPricesBatch(supabase, products.map((item) => item.id));
+
+    return (
+      <div className="flex flex-col gap-8">
+        <header className="flex flex-col gap-5 rounded-2xl border bg-card p-5 sm:flex-row sm:items-center">
+          <ProductImage
+            image_url={canonical.image_url ?? products.find((item) => item.image_url)?.image_url}
+            product={{ name: canonical.canonical_name, brand: canonical.brand }}
+            className="h-28 w-28 shrink-0"
+            sizes="112px"
+            alt={canonical.canonical_name}
+          />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{canonical.canonical_name}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Escolha a embalagem para comparar preços, consultar o histórico e criar alertas.
+            </p>
+          </div>
+        </header>
+        {products.length > 0 ? (
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {products.map((item) => (
+              <li key={item.id}>
+                <ProductCard product={item} latest={pricesByProduct.get(item.id) ?? []} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={PackageSearch}
+            title="Nenhuma embalagem disponível"
+            description="Este produto ainda não tem itens ativos no catálogo."
+          />
+        )}
+      </div>
+    );
+  }
   const p = product as {
     id: string;
     name: string;
