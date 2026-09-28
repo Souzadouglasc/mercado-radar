@@ -278,18 +278,18 @@ function DealList({ deals, kind }: { deals: DealRow[]; kind: "drop" | "low" }) {
         <li key={d.id}>
           <Link
             href={`/produtos/${d.slug}`}
-            className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent"
+            className="flex items-start justify-between gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent"
           >
-            <span className="flex min-w-0 flex-col">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <span className="truncate">{d.name}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex flex-col items-start gap-1 text-sm font-medium">
+                <span className="break-words leading-snug">{d.name}</span>
                 <Badge variant={kind === "drop" ? "default" : "secondary"} className="shrink-0 text-[10px]">
                   {kind === "drop" ? `-${d.dropPercent}%` : `+${d.dropPercent}% do mín.`}
                 </Badge>
-              </span>
+              </div>
               <span className="text-xs text-muted-foreground">{d.marketName}</span>
-            </span>
-            <Price value={d.current} />
+            </div>
+            <Price value={d.current} className="shrink-0" />
           </Link>
         </li>
       ))}

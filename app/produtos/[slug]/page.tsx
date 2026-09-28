@@ -211,9 +211,7 @@ async function ProdutosSimilares({ product, excludeId }: { product: ProductRow; 
                   alt={p.name}
                 />
                 <div className="p-3 flex flex-col gap-1">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <span className="truncate">{p.name}</span>
-                  </span>
+                  <span className="break-words text-sm font-medium leading-snug">{p.name}</span>
                   {p.brand && <span className="text-xs text-muted-foreground">{p.brand}</span>}
                   <div className="flex items-baseline gap-2 pt-1">
                     {unitPrice && (
@@ -518,3 +516,4 @@ export default async function ProdutoPage({ params, searchParams }: Props) {
     </div>
   );
 }
+
